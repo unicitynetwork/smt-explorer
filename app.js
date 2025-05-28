@@ -231,6 +231,20 @@ class BlockExplorer {
         document.getElementById('loading').classList.add('hidden');
     }
 
+    showSpinner() {
+        const spinner = document.getElementById('loadingSpinner');
+        if (spinner) {
+            spinner.classList.remove('hidden');
+        }
+    }
+
+    hideSpinner() {
+        const spinner = document.getElementById('loadingSpinner');
+        if (spinner) {
+            spinner.classList.add('hidden');
+        }
+    }
+
     showError(message) {
         const errorEl = document.getElementById('error');
         errorEl.textContent = message;
@@ -242,7 +256,7 @@ class BlockExplorer {
 
     async loadLatestBlock() {
         try {
-            this.showLoading();
+            this.showSpinner();
             const heightResult = await this.rpcClient.getBlockHeight();
             const height = heightResult.blockNumber;
             document.getElementById('currentHeight').textContent = height;
@@ -250,13 +264,12 @@ class BlockExplorer {
         } catch (error) {
             this.showError(`Failed to load latest block: ${error.message}`);
         } finally {
-            this.hideLoading();
+            this.hideSpinner();
         }
     }
 
     async loadBlocks() {
         try {
-            this.showLoading();
             const heightResult = await this.rpcClient.getBlockHeight();
             const height = parseInt(heightResult.blockNumber);
             this.totalBlocks = height; // blocks start from 1
@@ -293,7 +306,7 @@ class BlockExplorer {
         } catch (error) {
             this.showError(`Failed to load blocks: ${error.message}`);
         } finally {
-            this.hideLoading();
+            this.hideSpinner();
         }
     }
 
@@ -449,12 +462,15 @@ class BlockExplorer {
             
             // If we have a new block, update the display
             if (this.currentBlock !== null && newHeight > this.currentBlock) {
+                this.showSpinner(); // Show spinner when new blocks are found
                 this.currentBlock = newHeight;
                 document.getElementById('currentHeight').textContent = newHeight;
                 
                 // If we're on the first page (latest blocks), refresh the blocks list
                 if (this.currentPage === 0) {
                     this.loadBlocks();
+                } else {
+                    this.hideSpinner(); // Hide spinner if not refreshing blocks list
                 }
             } else if (this.currentBlock === null) {
                 // First time loading
@@ -515,7 +531,6 @@ class BlockExplorer {
 
     async showBlockDetail(blockNumber, updateURL = true) {
         try {
-            this.showLoading();
             
             const [block, commitments] = await Promise.all([
                 this.rpcClient.getBlock(blockNumber),
@@ -626,8 +641,6 @@ class BlockExplorer {
 
         } catch (error) {
             this.showError(`Failed to load block details: ${error.message}`);
-        } finally {
-            this.hideLoading();
         }
     }
 
@@ -663,7 +676,6 @@ class BlockExplorer {
 
     async showInclusionProof(requestId, updateURL = true, fromBlock = null) {
         try {
-            this.showLoading();
             const proof = await this.rpcClient.getInclusionProof(requestId);
             
             // Create modal or section to display inclusion proof
@@ -680,8 +692,6 @@ class BlockExplorer {
             
         } catch (error) {
             this.showError(`Failed to load inclusion proof: ${error.message}`);
-        } finally {
-            this.hideLoading();
         }
     }
 

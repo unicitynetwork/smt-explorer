@@ -38,12 +38,16 @@
     </header>
 
     <main>
-        <div id="loading" class="loading hidden">Loading...</div>
         <div id="error" class="error hidden"></div>
         
         <div id="overview" class="section">
             <div class="latest-block-header">
-                <h2>Latest Block</h2>
+                <div class="latest-block-title">
+                    <h2>Latest Block</h2>
+                    <div id="loadingSpinner" class="loading-spinner hidden">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
                 <div class="auto-refresh-control">
                     <label class="checkbox-label">
                         <input type="checkbox" id="autoRefreshCheckbox" checked>

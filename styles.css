@@ -201,6 +201,32 @@ main {
     margin-bottom: 0;
 }
 
+.latest-block-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.loading-spinner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(96, 165, 250, 0.3);
+    border-top: 2px solid #60a5fa;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 .auto-refresh-control {
     display: flex;
     align-items: center;
