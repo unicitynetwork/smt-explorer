@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unicity Block Explorer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>Unicity Block Explorer</h1>
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Search block number..." />
+            <button id="searchBtn">Search</button>
+        </div>
+    </header>
+
+    <main>
+        <div id="loading" class="loading hidden">Loading...</div>
+        <div id="error" class="error hidden"></div>
+        
+        <div id="overview" class="section">
+            <h2>Latest Block</h2>
+            <div id="latestBlock" class="block-card">
+                <div class="block-number">Block #<span id="currentHeight">-</span></div>
+                <button id="refreshBtn">Refresh</button>
+            </div>
+        </div>
+
+        <div id="blockList" class="section">
+            <div class="blocks-header">
+                <h2>Blocks</h2>
+                <div class="blocks-controls">
+                    <div class="page-size-control">
+                        <label for="pageSize">Show:</label>
+                        <select id="pageSize">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                        <span>blocks</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="blocksContainer" class="blocks-container"></div>
+            
+            <div class="pagination-controls">
+                <div class="pagination-info">
+                    <span id="blockRange">-</span>
+                </div>
+                <div class="pagination-buttons">
+                    <button id="firstPageBtn" class="nav-btn">⇤ First</button>
+                    <button id="prevPageBtn" class="nav-btn">← Prev</button>
+                    <button id="nextPageBtn" class="nav-btn">Next →</button>
+                    <button id="latestPageBtn" class="nav-btn">Latest ⇥</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="blockDetail" class="section hidden">
+            <h2>Block Details</h2>
+            <div id="blockDetailContent"></div>
+        </div>
+    </main>
+
+    <script src="rpc-client.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
