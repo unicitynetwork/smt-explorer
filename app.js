@@ -72,6 +72,10 @@ class BlockExplorer {
             this.goToLatestPage();
         });
 
+        document.getElementById('blockExplorerTitle').addEventListener('click', () => {
+            this.goToFrontpage();
+        });
+
         // Handle browser back/forward buttons
         window.addEventListener('popstate', (e) => {
             this.handleURLChange();
@@ -282,6 +286,17 @@ class BlockExplorer {
 
     goToLatestPage() {
         this.currentPage = 0;
+        this.loadBlocks();
+    }
+
+    goToFrontpage() {
+        // Reset to default state - latest page with default settings
+        this.currentPage = 0;
+        this.pageSize = 10;
+        document.getElementById('pageSize').value = '10';
+        
+        // Show the main blocks view
+        this.showBlockList();
         this.loadBlocks();
     }
 
