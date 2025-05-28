@@ -1,5 +1,6 @@
 class BlockExplorer {
     constructor() {
+        this.currentNetwork = 'testnet'; // default
         this.rpcClient = new AlphabillRPCClient();
         this.currentBlock = null;
         this.pageSize = 10;
@@ -76,6 +77,10 @@ class BlockExplorer {
             this.goToFrontpage();
         });
 
+        document.getElementById('networkSelect').addEventListener('change', (e) => {
+            this.changeNetwork(e.target.value);
+        });
+
         // Handle browser back/forward buttons
         window.addEventListener('popstate', (e) => {
             this.handleURLChange();
@@ -84,6 +89,17 @@ class BlockExplorer {
 
     initializeFromURL() {
         const params = new URLSearchParams(window.location.search);
+        
+        // Set network from URL
+        const network = params.get('network');
+        if (network && ['devnet', 'testnet', 'mainnet'].includes(network)) {
+            this.currentNetwork = network;
+            document.getElementById('networkSelect').value = network;
+            this.rpcClient.setEndpoint(AlphabillRPCClient.getNetworkEndpoint(network));
+        } else {
+            // Set default network
+            this.rpcClient.setEndpoint(AlphabillRPCClient.getNetworkEndpoint(this.currentNetwork));
+        }
         
         // Set page size from URL
         const pageSize = params.get('pageSize');
@@ -101,6 +117,14 @@ class BlockExplorer {
 
     handleURLChange() {
         const params = new URLSearchParams(window.location.search);
+        
+        // Handle network change
+        const network = params.get('network');
+        if (network && ['devnet', 'testnet', 'mainnet'].includes(network) && network !== this.currentNetwork) {
+            this.currentNetwork = network;
+            document.getElementById('networkSelect').value = network;
+            this.rpcClient.setEndpoint(AlphabillRPCClient.getNetworkEndpoint(network));
+        }
         
         // Handle block detail view
         const blockNumber = params.get('block');
@@ -144,6 +168,12 @@ class BlockExplorer {
         searchParams.delete('proof');
         searchParams.delete('page');
         searchParams.delete('pageSize');
+        searchParams.delete('network');
+
+        // Always include network in URL (unless it's the default testnet)
+        if (this.currentNetwork !== 'testnet') {
+            searchParams.set('network', this.currentNetwork);
+        }
 
         // Add new params
         Object.keys(params).forEach(key => {
@@ -299,6 +329,23 @@ class BlockExplorer {
         
         this.pageSize = newPageSize;
         this.currentPage = newCurrentPage;
+    }
+
+    changeNetwork(network) {
+        this.currentNetwork = network;
+        this.rpcClient.setEndpoint(AlphabillRPCClient.getNetworkEndpoint(network));
+        
+        // Reset to first page when changing networks
+        this.currentPage = 0;
+        
+        // Update URL and reload data
+        this.updateURL({
+            page: this.currentPage,
+            pageSize: this.pageSize
+        });
+        
+        this.loadLatestBlock();
+        this.loadBlocks();
     }
 
     goToFrontpage() {

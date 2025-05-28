@@ -4,6 +4,19 @@ class AlphabillRPCClient {
         this.requestId = 1;
     }
 
+    setEndpoint(endpoint) {
+        this.endpoint = endpoint;
+    }
+
+    static getNetworkEndpoint(network) {
+        const endpoints = {
+            'devnet': 'https://aggregator.devnet.alphabill.org/',
+            'testnet': 'https://aggregator-test.mainnet.alphabill.org/',
+            'mainnet': 'https://gateway.unicity.network/'
+        };
+        return endpoints[network] || endpoints['testnet'];
+    }
+
     async makeRequest(method, params = {}) {
         const request = {
             jsonrpc: '2.0',

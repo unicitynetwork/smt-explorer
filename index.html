@@ -16,6 +16,13 @@
             <div class="header-brand">
                 <img src="unicity_logo.png" alt="Unicity" class="logo" />
                 <h1 id="blockExplorerTitle" class="clickable-title">Block Explorer</h1>
+                <div class="network-selector">
+                    <select id="networkSelect">
+                        <option value="devnet">Devnet</option>
+                        <option value="testnet" selected>Testnet</option>
+                        <option value="mainnet">Mainnet</option>
+                    </select>
+                </div>
             </div>
             <div class="search-container">
                 <input type="text" id="searchInput" placeholder="Search block number..." />
