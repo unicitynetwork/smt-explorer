@@ -51,8 +51,8 @@ class BlockExplorer {
         });
 
         document.getElementById('pageSize').addEventListener('change', (e) => {
-            this.pageSize = parseInt(e.target.value);
-            this.currentPage = 0;
+            const newPageSize = parseInt(e.target.value);
+            this.adjustPageForNewPageSize(newPageSize);
             this.loadBlocks();
         });
 
@@ -287,6 +287,18 @@ class BlockExplorer {
     goToLatestPage() {
         this.currentPage = 0;
         this.loadBlocks();
+    }
+
+    adjustPageForNewPageSize(newPageSize) {
+        // Calculate the current block range being viewed
+        const currentStartBlock = Math.max(1, this.totalBlocks - (this.currentPage * this.pageSize) - (this.pageSize - 1));
+        
+        // Calculate what page that start block would be on with the new page size
+        const blocksFromEnd = this.totalBlocks - currentStartBlock + 1;
+        const newCurrentPage = Math.floor((blocksFromEnd - 1) / newPageSize);
+        
+        this.pageSize = newPageSize;
+        this.currentPage = newCurrentPage;
     }
 
     goToFrontpage() {
