@@ -6,6 +6,8 @@ class BlockExplorer {
         this.pageSize = 10;
         this.currentPage = 0;
         this.totalBlocks = 0;
+        this.autoRefresh = true; // default to enabled
+        this.pollingInterval = null;
         this.init();
     }
 
@@ -19,6 +21,9 @@ class BlockExplorer {
         const proofRequestId = params.get('proof');
         
         this.loadLatestBlock();
+        
+        // Start polling for new blocks
+        this.updatePolling();
         
         if (blockNumber) {
             // Show specific block
@@ -81,6 +86,10 @@ class BlockExplorer {
             this.changeNetwork(e.target.value);
         });
 
+        document.getElementById('autoRefreshCheckbox').addEventListener('change', (e) => {
+            this.setAutoRefresh(e.target.checked);
+        });
+
         // Handle browser back/forward buttons
         window.addEventListener('popstate', (e) => {
             this.handleURLChange();
@@ -112,6 +121,13 @@ class BlockExplorer {
         const page = params.get('page');
         if (page && !isNaN(parseInt(page))) {
             this.currentPage = parseInt(page);
+        }
+
+        // Set auto-refresh from URL (default is true)
+        const autoRefresh = params.get('autoRefresh');
+        if (autoRefresh !== null) {
+            this.autoRefresh = autoRefresh === 'true';
+            document.getElementById('autoRefreshCheckbox').checked = this.autoRefresh;
         }
     }
 
@@ -154,6 +170,14 @@ class BlockExplorer {
             this.currentPage = parseInt(page);
         }
 
+        // Handle auto-refresh setting
+        const autoRefresh = params.get('autoRefresh');
+        if (autoRefresh !== null && autoRefresh !== this.autoRefresh.toString()) {
+            this.autoRefresh = autoRefresh === 'true';
+            document.getElementById('autoRefreshCheckbox').checked = this.autoRefresh;
+            this.updatePolling();
+        }
+
         // Show main blocks view
         this.showBlockList();
         this.loadBlocks();
@@ -169,10 +193,16 @@ class BlockExplorer {
         searchParams.delete('page');
         searchParams.delete('pageSize');
         searchParams.delete('network');
+        searchParams.delete('autoRefresh');
 
         // Always include network in URL (unless it's the default testnet)
         if (this.currentNetwork !== 'testnet') {
             searchParams.set('network', this.currentNetwork);
+        }
+
+        // Include autoRefresh in URL only if it's disabled (since true is default)
+        if (!this.autoRefresh) {
+            searchParams.set('autoRefresh', 'false');
         }
 
         // Add new params
@@ -338,6 +368,9 @@ class BlockExplorer {
         // Reset to first page when changing networks
         this.currentPage = 0;
         
+        // Reset current block to trigger proper polling
+        this.currentBlock = null;
+        
         // Update URL and reload data
         this.updateURL({
             page: this.currentPage,
@@ -346,6 +379,68 @@ class BlockExplorer {
         
         this.loadLatestBlock();
         this.loadBlocks();
+        
+        // Restart polling with new network
+        this.updatePolling();
+    }
+
+    setAutoRefresh(enabled) {
+        this.autoRefresh = enabled;
+        this.updatePolling();
+        
+        // Update URL to reflect the change
+        this.updateURL({
+            page: this.currentPage,
+            pageSize: this.pageSize
+        });
+    }
+
+    updatePolling() {
+        // Clear existing interval
+        if (this.pollingInterval) {
+            clearInterval(this.pollingInterval);
+            this.pollingInterval = null;
+        }
+
+        // Start polling if auto-refresh is enabled
+        if (this.autoRefresh) {
+            this.pollingInterval = setInterval(() => {
+                this.checkForNewBlocks();
+            }, 1000); // 1 second interval
+        }
+    }
+
+    async checkForNewBlocks() {
+        try {
+            // Only poll if we're in the main blocks view (not block detail or proof view)
+            const isInBlockDetailView = !document.getElementById('blockDetail').classList.contains('hidden');
+            const isInProofView = document.querySelector('.modal-overlay') !== null;
+            
+            if (isInBlockDetailView || isInProofView) {
+                return; // Don't auto-refresh when viewing block details or proofs
+            }
+            
+            const heightResult = await this.rpcClient.getBlockHeight();
+            const newHeight = parseInt(heightResult.blockNumber);
+            
+            // If we have a new block, update the display
+            if (this.currentBlock !== null && newHeight > this.currentBlock) {
+                this.currentBlock = newHeight;
+                document.getElementById('currentHeight').textContent = newHeight;
+                
+                // If we're on the first page (latest blocks), refresh the blocks list
+                if (this.currentPage === 0) {
+                    this.loadBlocks();
+                }
+            } else if (this.currentBlock === null) {
+                // First time loading
+                this.currentBlock = newHeight;
+                document.getElementById('currentHeight').textContent = newHeight;
+            }
+        } catch (error) {
+            // Silently handle polling errors to avoid spam
+            console.warn('Polling error:', error.message);
+        }
     }
 
     goToFrontpage() {

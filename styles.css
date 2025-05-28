@@ -190,6 +190,80 @@ main {
     font-weight: 600;
 }
 
+.latest-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.latest-block-header h2 {
+    margin-bottom: 0;
+}
+
+.auto-refresh-control {
+    display: flex;
+    align-items: center;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    user-select: none;
+    transition: color 0.3s ease;
+}
+
+.checkbox-label:hover {
+    color: #60a5fa;
+}
+
+.checkbox-label input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.checkmark {
+    position: relative;
+    height: 18px;
+    width: 18px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    margin-right: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.checkbox-label:hover .checkmark {
+    border-color: #60a5fa;
+    background: rgba(96, 165, 250, 0.1);
+}
+
+.checkbox-label input:checked ~ .checkmark {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    border-color: #60a5fa;
+}
+
+.checkmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+    left: 5px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.checkbox-label input:checked ~ .checkmark:after {
+    display: block;
+}
+
 .block-card {
     background: linear-gradient(135deg, #3b82f6, #8b5cf6);
     color: white;

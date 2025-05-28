@@ -42,7 +42,16 @@
         <div id="error" class="error hidden"></div>
         
         <div id="overview" class="section">
-            <h2>Latest Block</h2>
+            <div class="latest-block-header">
+                <h2>Latest Block</h2>
+                <div class="auto-refresh-control">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="autoRefreshCheckbox" checked>
+                        <span class="checkmark"></span>
+                        Auto-refresh
+                    </label>
+                </div>
+            </div>
             <div id="latestBlock" class="block-card">
                 <div class="block-number">Block #<span id="currentHeight">-</span></div>
                 <button id="refreshBtn">Refresh</button>
