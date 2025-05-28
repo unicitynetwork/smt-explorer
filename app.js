@@ -8,10 +8,30 @@ class BlockExplorer {
         this.init();
     }
 
-    init() {
+    async init() {
         this.bindEvents();
+        this.initializeFromURL();
+        
+        // Check if we need to show a specific view based on URL
+        const params = new URLSearchParams(window.location.search);
+        const blockNumber = params.get('block');
+        const proofRequestId = params.get('proof');
+        
         this.loadLatestBlock();
-        this.loadBlocks();
+        
+        if (blockNumber) {
+            // Show specific block
+            await this.showBlockDetail(blockNumber, false);
+        } else {
+            // Show blocks list
+            this.loadBlocks();
+        }
+        
+        if (proofRequestId) {
+            // Show inclusion proof modal
+            const fromBlock = params.get('block');
+            await this.showInclusionProof(proofRequestId, false, fromBlock);
+        }
     }
 
     bindEvents() {
@@ -51,6 +71,88 @@ class BlockExplorer {
         document.getElementById('latestPageBtn').addEventListener('click', () => {
             this.goToLatestPage();
         });
+
+        // Handle browser back/forward buttons
+        window.addEventListener('popstate', (e) => {
+            this.handleURLChange();
+        });
+    }
+
+    initializeFromURL() {
+        const params = new URLSearchParams(window.location.search);
+        
+        // Set page size from URL
+        const pageSize = params.get('pageSize');
+        if (pageSize && [5, 10, 25, 50, 100].includes(parseInt(pageSize))) {
+            this.pageSize = parseInt(pageSize);
+            document.getElementById('pageSize').value = pageSize;
+        }
+
+        // Set current page from URL
+        const page = params.get('page');
+        if (page && !isNaN(parseInt(page))) {
+            this.currentPage = parseInt(page);
+        }
+    }
+
+    handleURLChange() {
+        const params = new URLSearchParams(window.location.search);
+        
+        // Handle block detail view
+        const blockNumber = params.get('block');
+        if (blockNumber) {
+            this.showBlockDetail(blockNumber, false); // false = don't update URL
+            return;
+        }
+
+        // Handle inclusion proof
+        const proofRequestId = params.get('proof');
+        if (proofRequestId) {
+            const fromBlock = params.get('block');
+            this.showInclusionProof(proofRequestId, false, fromBlock); // false = don't update URL
+            return;
+        }
+
+        // Handle pagination
+        const pageSize = params.get('pageSize');
+        const page = params.get('page');
+        
+        if (pageSize && [5, 10, 25, 50, 100].includes(parseInt(pageSize))) {
+            this.pageSize = parseInt(pageSize);
+            document.getElementById('pageSize').value = pageSize;
+        }
+        
+        if (page && !isNaN(parseInt(page))) {
+            this.currentPage = parseInt(page);
+        }
+
+        // Show main blocks view
+        this.showBlockList();
+        this.loadBlocks();
+    }
+
+    updateURL(params = {}) {
+        const url = new URL(window.location);
+        const searchParams = url.searchParams;
+
+        // Clear existing params that we manage
+        searchParams.delete('block');
+        searchParams.delete('proof');
+        searchParams.delete('page');
+        searchParams.delete('pageSize');
+
+        // Add new params
+        Object.keys(params).forEach(key => {
+            if (params[key] !== null && params[key] !== undefined) {
+                searchParams.set(key, params[key]);
+            }
+        });
+
+        // Update URL without page reload
+        const newURL = url.toString();
+        if (newURL !== window.location.href) {
+            window.history.pushState({}, '', newURL);
+        }
     }
 
     showLoading() {
@@ -118,11 +220,23 @@ class BlockExplorer {
             });
 
             this.updatePaginationControls(startBlock, endBlock, height);
+            this.updatePaginationURL();
 
         } catch (error) {
             this.showError(`Failed to load blocks: ${error.message}`);
         } finally {
             this.hideLoading();
+        }
+    }
+
+    updatePaginationURL() {
+        // Only update URL if we're on the main blocks view
+        const params = new URLSearchParams(window.location.search);
+        if (!params.get('block') && !params.get('proof')) {
+            this.updateURL({
+                page: this.currentPage,
+                pageSize: this.pageSize
+            });
         }
     }
 
@@ -206,7 +320,7 @@ class BlockExplorer {
         }
     }
 
-    async showBlockDetail(blockNumber) {
+    async showBlockDetail(blockNumber, updateURL = true) {
         try {
             this.showLoading();
             
@@ -273,7 +387,7 @@ class BlockExplorer {
                                         <div class="commitment-details">
                                             <div class="detail-row">
                                                 <label>Request ID:</label>
-                                                <span class="hash clickable-hash" data-request-id="${commitment.requestId}" onclick="blockExplorer.showInclusionProof('${commitment.requestId}')">${commitment.requestId}</span>
+                                                <span class="hash clickable-hash" data-request-id="${commitment.requestId}" onclick="blockExplorer.showInclusionProofFromBlock('${commitment.requestId}', '${blockNumber}')">${commitment.requestId}</span>
                                             </div>
                                             <div class="detail-row">
                                                 <label>Transaction Hash:</label>
@@ -312,6 +426,11 @@ class BlockExplorer {
             document.getElementById('blockList').classList.add('hidden');
             document.getElementById('overview').classList.add('hidden');
 
+            // Update URL with block parameter
+            if (updateURL) {
+                this.updateURL({ block: blockNumber });
+            }
+
         } catch (error) {
             this.showError(`Failed to load block details: ${error.message}`);
         } finally {
@@ -323,6 +442,12 @@ class BlockExplorer {
         document.getElementById('blockDetail').classList.add('hidden');
         document.getElementById('blockList').classList.remove('hidden');
         document.getElementById('overview').classList.remove('hidden');
+        
+        // Update URL to show blocks view with current pagination
+        this.updateURL({
+            page: this.currentPage,
+            pageSize: this.pageSize
+        });
     }
 
     async searchBlock() {
@@ -343,13 +468,22 @@ class BlockExplorer {
         input.value = '';
     }
 
-    async showInclusionProof(requestId) {
+    async showInclusionProof(requestId, updateURL = true, fromBlock = null) {
         try {
             this.showLoading();
             const proof = await this.rpcClient.getInclusionProof(requestId);
             
             // Create modal or section to display inclusion proof
-            this.displayInclusionProofModal(requestId, proof);
+            this.displayInclusionProofModal(requestId, proof, fromBlock);
+            
+            // Update URL with proof parameter
+            if (updateURL) {
+                const urlParams = { proof: requestId };
+                if (fromBlock) {
+                    urlParams.block = fromBlock;
+                }
+                this.updateURL(urlParams);
+            }
             
         } catch (error) {
             this.showError(`Failed to load inclusion proof: ${error.message}`);
@@ -358,7 +492,11 @@ class BlockExplorer {
         }
     }
 
-    displayInclusionProofModal(requestId, proof) {
+    async showInclusionProofFromBlock(requestId, blockNumber) {
+        await this.showInclusionProof(requestId, true, blockNumber);
+    }
+
+    displayInclusionProofModal(requestId, proof, fromBlock = null) {
         // Create modal overlay
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
@@ -366,7 +504,7 @@ class BlockExplorer {
             <div class="modal-content">
                 <div class="modal-header">
                     <h3>Inclusion Proof</h3>
-                    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
+                    <button class="modal-close">×</button>
                 </div>
                 <div class="modal-body">
                     <div class="proof-request-id">
@@ -383,10 +521,23 @@ class BlockExplorer {
         
         document.body.appendChild(modal);
         
-        // Close modal when clicking outside
+        // Close modal handlers
+        const closeModal = () => {
+            modal.remove();
+            // Remove proof parameter from URL and go back to previous state
+            if (fromBlock) {
+                // Return to the block view we came from
+                this.updateURL({ block: fromBlock });
+            } else {
+                // Return to blocks list
+                this.updateURL({ page: this.currentPage, pageSize: this.pageSize });
+            }
+        };
+
+        modal.querySelector('.modal-close').addEventListener('click', closeModal);
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
-                modal.remove();
+                closeModal();
             }
         });
     }
