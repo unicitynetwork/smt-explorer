@@ -313,6 +313,28 @@ main {
     gap: 1rem;
 }
 
+.block-slide-down {
+    transform: translateY(0);
+    transition: transform 0.4s ease;
+}
+
+.block-new-appear {
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.block-new-appear.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.block-fade-out {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
 .block-summary {
     background: rgba(45, 45, 65, 0.6);
     backdrop-filter: blur(10px);
@@ -320,7 +342,7 @@ main {
     border-radius: 12px;
     padding: 1rem;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s ease, transform 0.4s ease, opacity 0.4s ease;
 }
 
 .block-summary:hover {

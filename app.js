@@ -275,30 +275,19 @@ class BlockExplorer {
             this.totalBlocks = height; // blocks start from 1
             
             const container = document.getElementById('blocksContainer');
-            container.innerHTML = '';
-
+            
             // Calculate block range for current page
             const startBlock = Math.max(1, height - (this.currentPage * this.pageSize) - (this.pageSize - 1));
             const endBlock = Math.max(1, height - (this.currentPage * this.pageSize));
 
-            // Load blocks for current page
-            const promises = [];
-            for (let i = startBlock; i <= endBlock; i++) {
-                promises.push(this.loadBlockSummary(i));
+            // For auto-refresh on first page, check for new blocks and add them smoothly
+            if (this.currentPage === 0 && this.autoRefresh) {
+                await this.loadBlocksSmooth(container, startBlock, endBlock, height);
+            } else {
+                // For pagination or manual refresh, clear and rebuild
+                container.innerHTML = '';
+                await this.loadBlocksComplete(container, startBlock, endBlock);
             }
-
-            const blocks = await Promise.all(promises);
-            blocks.reverse().forEach(blockHtml => {
-                container.innerHTML += blockHtml;
-            });
-
-            // Add click handlers for block details
-            container.querySelectorAll('.block-summary').forEach(block => {
-                block.addEventListener('click', (e) => {
-                    const blockNumber = e.target.closest('.block-summary').dataset.blockNumber;
-                    this.showBlockDetail(blockNumber);
-                });
-            });
 
             this.updatePaginationControls(startBlock, endBlock, height);
             this.updatePaginationURL();
@@ -307,6 +296,97 @@ class BlockExplorer {
             this.showError(`Failed to load blocks: ${error.message}`);
         } finally {
             this.hideSpinner();
+        }
+    }
+
+    async loadBlocksComplete(container, startBlock, endBlock) {
+        // Load blocks for current page
+        const promises = [];
+        for (let i = startBlock; i <= endBlock; i++) {
+            promises.push(this.loadBlockSummary(i));
+        }
+
+        const blocks = await Promise.all(promises);
+        blocks.reverse().forEach(blockHtml => {
+            container.innerHTML += blockHtml;
+        });
+
+        // Add click handlers for block details
+        container.querySelectorAll('.block-summary').forEach(block => {
+            block.addEventListener('click', (e) => {
+                const blockNumber = e.target.closest('.block-summary').dataset.blockNumber;
+                this.showBlockDetail(blockNumber);
+            });
+        });
+    }
+
+    async loadBlocksSmooth(container, startBlock, endBlock, currentHeight) {
+        // Get existing block numbers
+        const existingBlocks = Array.from(container.querySelectorAll('.block-summary'))
+            .map(el => parseInt(el.dataset.blockNumber))
+            .sort((a, b) => b - a); // Sort descending (newest first)
+        
+        const highestExisting = existingBlocks.length > 0 ? Math.max(...existingBlocks) : 0;
+        
+        // Find new blocks that need to be added
+        const newBlocks = [];
+        for (let i = endBlock; i > highestExisting && i >= startBlock; i--) {
+            newBlocks.push(i);
+        }
+        
+        // Load and add new blocks to the top
+        if (newBlocks.length > 0) {
+            const promises = newBlocks.map(blockNum => this.loadBlockSummary(blockNum));
+            const blockHtmls = await Promise.all(promises);
+            
+            // Add slide-down class to existing blocks to prepare for animation
+            const existingBlockElements = container.querySelectorAll('.block-summary');
+            existingBlockElements.forEach(block => {
+                block.classList.add('block-slide-down');
+            });
+            
+            // Add new blocks to the top with animation in correct order (highest block first)
+            // Since newBlocks is in descending order, process in reverse to insert highest first
+            for (let i = blockHtmls.length - 1; i >= 0; i--) {
+                const blockHtml = blockHtmls[i];
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = blockHtml;
+                const newBlockEl = tempDiv.firstElementChild;
+                
+                // Add animation classes
+                newBlockEl.classList.add('block-new-appear');
+                
+                // Insert at the beginning
+                container.insertBefore(newBlockEl, container.firstChild);
+                
+                // Add click handler
+                newBlockEl.addEventListener('click', (e) => {
+                    const blockNumber = e.target.closest('.block-summary').dataset.blockNumber;
+                    this.showBlockDetail(blockNumber);
+                });
+                
+                // Trigger animation after a brief delay
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        newBlockEl.classList.add('visible');
+                    });
+                });
+            }
+        }
+        
+        // Remove excess blocks from the bottom if we exceed the page size
+        const allBlocks = container.querySelectorAll('.block-summary');
+        if (allBlocks.length > this.pageSize) {
+            const blocksToRemove = Array.from(allBlocks).slice(this.pageSize);
+            blocksToRemove.forEach(block => {
+                block.classList.add('block-fade-out');
+                
+                setTimeout(() => {
+                    if (block.parentNode) {
+                        block.remove();
+                    }
+                }, 300);
+            });
         }
     }
 
