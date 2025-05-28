@@ -54,8 +54,8 @@ class AlphabillRPCClient {
         return await this.makeRequest('get_block_commitments', { blockNumber: blockNumber.toString() });
     }
 
-    async getInclusionProof(commitment) {
-        return await this.makeRequest('get_inclusion_proof', { commitment });
+    async getInclusionProof(requestId) {
+        return await this.makeRequest('get_inclusion_proof', { requestId });
     }
 
     async getNoDeletionProof() {

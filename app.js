@@ -273,7 +273,7 @@ class BlockExplorer {
                                         <div class="commitment-details">
                                             <div class="detail-row">
                                                 <label>Request ID:</label>
-                                                <span class="hash">${commitment.requestId}</span>
+                                                <span class="hash clickable-hash" data-request-id="${commitment.requestId}" onclick="blockExplorer.showInclusionProof('${commitment.requestId}')">${commitment.requestId}</span>
                                             </div>
                                             <div class="detail-row">
                                                 <label>Transaction Hash:</label>
@@ -342,9 +342,58 @@ class BlockExplorer {
         await this.showBlockDetail(parseInt(blockNumber));
         input.value = '';
     }
+
+    async showInclusionProof(requestId) {
+        try {
+            this.showLoading();
+            const proof = await this.rpcClient.getInclusionProof(requestId);
+            
+            // Create modal or section to display inclusion proof
+            this.displayInclusionProofModal(requestId, proof);
+            
+        } catch (error) {
+            this.showError(`Failed to load inclusion proof: ${error.message}`);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    displayInclusionProofModal(requestId, proof) {
+        // Create modal overlay
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Inclusion Proof</h3>
+                    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="proof-request-id">
+                        <label>Request ID:</label>
+                        <span class="hash">${requestId}</span>
+                    </div>
+                    <div class="proof-details">
+                        <h4>Proof Data</h4>
+                        <pre class="proof-json">${JSON.stringify(proof, null, 2)}</pre>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Close modal when clicking outside
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+    }
 }
 
 // Initialize the block explorer when the page loads
+let blockExplorer;
 document.addEventListener('DOMContentLoaded', () => {
-    new BlockExplorer();
+    blockExplorer = new BlockExplorer();
 });
