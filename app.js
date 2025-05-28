@@ -129,6 +129,9 @@ class BlockExplorer {
             this.autoRefresh = autoRefresh === 'true';
             document.getElementById('autoRefreshCheckbox').checked = this.autoRefresh;
         }
+        
+        // Update button state after setting auto-refresh state
+        this.updateRefreshButtonState();
     }
 
     handleURLChange() {
@@ -176,6 +179,7 @@ class BlockExplorer {
             this.autoRefresh = autoRefresh === 'true';
             document.getElementById('autoRefreshCheckbox').checked = this.autoRefresh;
             this.updatePolling();
+            this.updateRefreshButtonState();
         }
 
         // Show main blocks view
@@ -387,12 +391,32 @@ class BlockExplorer {
     setAutoRefresh(enabled) {
         this.autoRefresh = enabled;
         this.updatePolling();
+        this.updateRefreshButtonState();
         
         // Update URL to reflect the change
         this.updateURL({
             page: this.currentPage,
             pageSize: this.pageSize
         });
+    }
+
+    updateRefreshButtonState() {
+        const refreshBtn = document.getElementById('refreshBtn');
+        if (refreshBtn) {
+            if (this.autoRefresh) {
+                refreshBtn.disabled = true;
+                refreshBtn.style.opacity = '0.5';
+                refreshBtn.style.cursor = 'not-allowed';
+                refreshBtn.title = 'Disable auto-refresh to enable manual refresh';
+                refreshBtn.setAttribute('disabled', 'true');
+            } else {
+                refreshBtn.disabled = false;
+                refreshBtn.style.opacity = '1';
+                refreshBtn.style.cursor = 'pointer';
+                refreshBtn.title = 'Refresh latest block and blocks list';
+                refreshBtn.removeAttribute('disabled');
+            }
+        }
     }
 
     updatePolling() {
@@ -716,4 +740,8 @@ class BlockExplorer {
 let blockExplorer;
 document.addEventListener('DOMContentLoaded', () => {
     blockExplorer = new BlockExplorer();
+    // Force update button state after everything is loaded
+    setTimeout(() => {
+        blockExplorer.updateRefreshButtonState();
+    }, 100);
 });
