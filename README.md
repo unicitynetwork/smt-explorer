@@ -14,7 +14,7 @@ A modern, browser-based block explorer for the Unicity blockchain. Built with va
 
 ## Live Demo
 
-Visit the live demo: [Unicity Block Explorer](https://your-username.github.io/smt-explorer)
+Visit the live demo: [Unicity Block Explorer](https://unicitynetwork.github.io/smt-explorer)
 
 ## API Integration
 
