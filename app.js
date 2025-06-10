@@ -1,7 +1,7 @@
 class BlockExplorer {
     constructor() {
         this.currentNetwork = 'testnet'; // default
-        this.rpcClient = new AlphabillRPCClient();
+        this.rpcClient = new AggregatorRPCClient();
         this.currentBlock = null;
         this.pageSize = 10;
         this.currentPage = 0;
@@ -109,10 +109,10 @@ class BlockExplorer {
         if (network && ['devnet', 'testnet', 'mainnet'].includes(network)) {
             this.currentNetwork = network;
             document.getElementById('networkSelect').value = network;
-            this.rpcClient.setEndpoint(AlphabillRPCClient.getNetworkEndpoint(network));
+            this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(network));
         } else {
             // Set default network
-            this.rpcClient.setEndpoint(AlphabillRPCClient.getNetworkEndpoint(this.currentNetwork));
+            this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(this.currentNetwork));
         }
         
         // Set page size from URL
@@ -154,7 +154,7 @@ class BlockExplorer {
         if (network && ['devnet', 'testnet', 'mainnet'].includes(network) && network !== this.currentNetwork) {
             this.currentNetwork = network;
             document.getElementById('networkSelect').value = network;
-            this.rpcClient.setEndpoint(AlphabillRPCClient.getNetworkEndpoint(network));
+            this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(network));
         }
         
         // Handle block detail view
@@ -495,7 +495,7 @@ class BlockExplorer {
 
     changeNetwork(network) {
         this.currentNetwork = network;
-        this.rpcClient.setEndpoint(AlphabillRPCClient.getNetworkEndpoint(network));
+        this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(network));
         
         // Reset to first page when changing networks
         this.currentPage = 0;

@@ -1,5 +1,5 @@
-class AlphabillRPCClient {
-    constructor(endpoint = 'https://aggregator-test.mainnet.alphabill.org') {
+class AggregatorRPCClient {
+    constructor(endpoint = 'https://aggregator-test.mainnet.unicity.network') {
         this.endpoint = endpoint;
         this.requestId = 1;
     }
@@ -10,9 +10,9 @@ class AlphabillRPCClient {
 
     static getNetworkEndpoint(network) {
         const endpoints = {
-            'devnet': 'https://aggregator.devnet.alphabill.org/',
-            'testnet': 'https://aggregator-test.mainnet.alphabill.org/',
-            'mainnet': 'https://gateway.unicity.network/'
+            // 'devnet': '...',
+            'testnet': 'https://aggregator-test.mainnet.unicity.network/',
+            'mainnet': 'https://aggregator.mainnet.unicity.network/'
         };
         return endpoints[network] || endpoints['testnet'];
     }
