@@ -7,6 +7,7 @@ class BlockExplorer {
         this.currentPage = 0;
         this.totalBlocks = 0;
         this.autoRefresh = true; // default to enabled
+        this.includeEmpty = true; // default to enabled
         this.pollingInterval = null;
         this.init();
     }
@@ -90,6 +91,10 @@ class BlockExplorer {
             this.setAutoRefresh(e.target.checked);
         });
 
+        document.getElementById('includeEmptyCheckbox').addEventListener('change', (e) => {
+            this.setIncludeEmpty(e.target.checked);
+        });
+
         // Handle browser back/forward buttons
         window.addEventListener('popstate', (e) => {
             this.handleURLChange();
@@ -128,6 +133,13 @@ class BlockExplorer {
         if (autoRefresh !== null) {
             this.autoRefresh = autoRefresh === 'true';
             document.getElementById('autoRefreshCheckbox').checked = this.autoRefresh;
+        }
+
+        // Set include-empty from URL (default is true)
+        const includeEmpty = params.get('includeEmpty');
+        if (includeEmpty !== null) {
+            this.includeEmpty = includeEmpty === 'true';
+            document.getElementById('includeEmptyCheckbox').checked = this.includeEmpty;
         }
         
         // Update button state after setting auto-refresh state
@@ -182,6 +194,13 @@ class BlockExplorer {
             this.updateRefreshButtonState();
         }
 
+        // Handle include-empty setting
+        const includeEmpty = params.get('includeEmpty');
+        if (includeEmpty !== null && includeEmpty !== this.includeEmpty.toString()) {
+            this.includeEmpty = includeEmpty === 'true';
+            document.getElementById('includeEmptyCheckbox').checked = this.includeEmpty;
+        }
+
         // Show main blocks view
         this.showBlockList();
         this.loadBlocks();
@@ -207,6 +226,11 @@ class BlockExplorer {
         // Include autoRefresh in URL only if it's disabled (since true is default)
         if (!this.autoRefresh) {
             searchParams.set('autoRefresh', 'false');
+        }
+
+        // Include includeEmpty in URL only if it's disabled (since true is default)
+        if (!this.includeEmpty) {
+            searchParams.set('includeEmpty', 'false');
         }
 
         // Add new params
@@ -307,8 +331,28 @@ class BlockExplorer {
         }
 
         const blocks = await Promise.all(promises);
-        blocks.reverse().forEach(blockHtml => {
-            container.innerHTML += blockHtml;
+        
+        // Filter blocks based on includeEmpty setting
+        const filteredBlocks = blocks.filter(block => 
+            this.includeEmpty || !block.isEmpty
+        );
+        
+        // If we don't have enough blocks after filtering, try to load more
+        if (filteredBlocks.length < this.pageSize && startBlock > 1) {
+            const additionalCount = Math.min(this.pageSize - filteredBlocks.length, startBlock - 1);
+            const additionalPromises = [];
+            for (let i = startBlock - additionalCount; i < startBlock; i++) {
+                additionalPromises.push(this.loadBlockSummary(i));
+            }
+            const additionalBlocks = await Promise.all(additionalPromises);
+            const additionalFiltered = additionalBlocks.filter(block => 
+                this.includeEmpty || !block.isEmpty
+            );
+            filteredBlocks.unshift(...additionalFiltered);
+        }
+        
+        filteredBlocks.reverse().forEach(block => {
+            container.innerHTML += block.html;
         });
 
         // Add click handlers for block details
@@ -337,7 +381,12 @@ class BlockExplorer {
         // Load and add new blocks to the top
         if (newBlocks.length > 0) {
             const promises = newBlocks.map(blockNum => this.loadBlockSummary(blockNum));
-            const blockHtmls = await Promise.all(promises);
+            const blocks = await Promise.all(promises);
+            
+            // Filter blocks based on includeEmpty setting
+            const filteredBlocks = blocks.filter(block => 
+                this.includeEmpty || !block.isEmpty
+            );
             
             // Add slide-down class to existing blocks to prepare for animation
             const existingBlockElements = container.querySelectorAll('.block-summary');
@@ -346,11 +395,10 @@ class BlockExplorer {
             });
             
             // Add new blocks to the top with animation in correct order (highest block first)
-            // Since newBlocks is in descending order, process in reverse to insert highest first
-            for (let i = blockHtmls.length - 1; i >= 0; i--) {
-                const blockHtml = blockHtmls[i];
+            for (let i = filteredBlocks.length - 1; i >= 0; i--) {
+                const block = filteredBlocks[i];
                 const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = blockHtml;
+                tempDiv.innerHTML = block.html;
                 const newBlockEl = tempDiv.firstElementChild;
                 
                 // Add animation classes
@@ -493,6 +541,19 @@ class BlockExplorer {
         });
     }
 
+    setIncludeEmpty(enabled) {
+        this.includeEmpty = enabled;
+        
+        // Reload blocks with new filter
+        this.loadBlocks();
+        
+        // Update URL to reflect the change
+        this.updateURL({
+            page: this.currentPage,
+            pageSize: this.pageSize
+        });
+    }
+
     updateRefreshButtonState() {
         const refreshBtn = document.getElementById('refreshBtn');
         if (refreshBtn) {
@@ -585,7 +646,7 @@ class BlockExplorer {
             const commitmentCount = commitments.length;
             const isEmpty = commitmentCount === 0;
             
-            return `
+            const html = `
                 <div class="block-summary ${isEmpty ? 'empty-block' : 'has-commitments'}" data-block-number="${blockNumber}">
                     <div class="block-header">
                         <div class="block-number">Block #${blockNumber}</div>
@@ -599,13 +660,16 @@ class BlockExplorer {
                     </div>
                 </div>
             `;
+            
+            return { html, isEmpty, blockNumber };
         } catch (error) {
-            return `
+            const html = `
                 <div class="block-summary error" data-block-number="${blockNumber}">
                     <div class="block-number">Block #${blockNumber}</div>
                     <div class="block-info">Error loading block</div>
                 </div>
             `;
+            return { html, isEmpty: false, blockNumber };
         }
     }
 
