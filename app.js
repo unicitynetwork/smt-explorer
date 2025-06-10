@@ -337,20 +337,7 @@ class BlockExplorer {
             this.includeEmpty || !block.isEmpty
         );
         
-        // If we don't have enough blocks after filtering, try to load more
-        if (filteredBlocks.length < this.pageSize && startBlock > 1) {
-            const additionalCount = Math.min(this.pageSize - filteredBlocks.length, startBlock - 1);
-            const additionalPromises = [];
-            for (let i = startBlock - additionalCount; i < startBlock; i++) {
-                additionalPromises.push(this.loadBlockSummary(i));
-            }
-            const additionalBlocks = await Promise.all(additionalPromises);
-            const additionalFiltered = additionalBlocks.filter(block => 
-                this.includeEmpty || !block.isEmpty
-            );
-            filteredBlocks.unshift(...additionalFiltered);
-        }
-        
+        // Display filtered blocks (might be empty if all blocks are empty and includeEmpty is false)
         filteredBlocks.reverse().forEach(block => {
             container.innerHTML += block.html;
         });
@@ -637,14 +624,19 @@ class BlockExplorer {
 
     async loadBlockSummary(blockNumber) {
         try {
-            const [block, commitments] = await Promise.all([
-                this.rpcClient.getBlock(blockNumber),
-                this.rpcClient.getBlockCommitments(blockNumber).catch(() => [])
-            ]);
+            const block = await this.rpcClient.getBlock(blockNumber);
+            
+            // Optimization: if previousBlockHash equals rootHash, block is definitely empty
+            const isDefinitelyEmpty = block.previousBlockHash === block.rootHash;
+            
+            let commitments = [];
+            if (!isDefinitelyEmpty) {
+                commitments = await this.rpcClient.getBlockCommitments(blockNumber).catch(() => []);
+            }
             
             const timestamp = new Date(parseInt(block.timestamp) * 1000).toLocaleString();
             const commitmentCount = commitments.length;
-            const isEmpty = commitmentCount === 0;
+            const isEmpty = isDefinitelyEmpty || commitmentCount === 0;
             
             const html = `
                 <div class="block-summary ${isEmpty ? 'empty-block' : 'has-commitments'}" data-block-number="${blockNumber}">
@@ -669,17 +661,24 @@ class BlockExplorer {
                     <div class="block-info">Error loading block</div>
                 </div>
             `;
-            return { html, isEmpty: false, blockNumber };
+            return { html, isEmpty: true, blockNumber };
         }
     }
 
     async showBlockDetail(blockNumber, updateURL = true) {
         try {
             
-            const [block, commitments] = await Promise.all([
-                this.rpcClient.getBlock(blockNumber),
-                this.rpcClient.getBlockCommitments(blockNumber).catch(() => null)
-            ]);
+            const block = await this.rpcClient.getBlock(blockNumber);
+            
+            // Optimization: if previousBlockHash equals rootHash, block is definitely empty
+            const isDefinitelyEmpty = block.previousBlockHash === block.rootHash;
+            
+            let commitments = null;
+            if (!isDefinitelyEmpty) {
+                commitments = await this.rpcClient.getBlockCommitments(blockNumber).catch(() => null);
+            } else {
+                commitments = [];
+            }
 
             const detailSection = document.getElementById('blockDetail');
             const contentEl = document.getElementById('blockDetailContent');
