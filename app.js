@@ -503,6 +503,27 @@ class BlockExplorer {
         // Reset current block to trigger proper polling
         this.currentBlock = null;
         
+        // Reset total blocks count
+        this.totalBlocks = 0;
+        
+        // Clear the blocks container to remove blocks from previous network
+        const container = document.getElementById('blocksContainer');
+        if (container) {
+            container.innerHTML = '';
+        }
+        
+        // Clear the current height display
+        const currentHeightEl = document.getElementById('currentHeight');
+        if (currentHeightEl) {
+            currentHeightEl.textContent = 'Loading...';
+        }
+        
+        // Clear the block range display
+        const blockRangeEl = document.getElementById('blockRange');
+        if (blockRangeEl) {
+            blockRangeEl.textContent = 'Loading...';
+        }
+        
         // Update URL and reload data
         this.updateURL({
             page: this.currentPage,
