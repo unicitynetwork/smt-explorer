@@ -100,7 +100,19 @@ class AggregatorRPCClient {
     }
 
     async getBlockCommitments(blockNumber) {
-        return await this.makeRequest('get_block_commitments', { blockNumber: blockNumber.toString() });
+        const result = await this.makeRequest('get_block_commitments', { blockNumber: blockNumber.toString() });
+        
+        // Handle different response structures
+        if (this.aggregatorType === 'go') {
+            // Go aggregator returns commitments wrapped in a 'commitments' field
+            if (result && result.commitments) {
+                return result.commitments;
+            }
+            return [];
+        }
+        
+        // TS aggregator returns commitments directly as an array
+        return result || [];
     }
 
     async getInclusionProof(requestId) {
