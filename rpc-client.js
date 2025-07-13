@@ -76,15 +76,32 @@ class AggregatorRPCClient {
             if (result && result.block) {
                 // Normalize the Go block structure to match TS structure
                 const goBlock = result.block;
+                
+                // Helper function to decode double-encoded hex strings
+                const decodeDoubleHex = (hexStr) => {
+                    if (!hexStr) return null;
+                    try {
+                        // Convert pairs of hex characters to their ASCII values
+                        let decoded = '';
+                        for (let i = 0; i < hexStr.length; i += 2) {
+                            const hex = hexStr.substr(i, 2);
+                            decoded += String.fromCharCode(parseInt(hex, 16));
+                        }
+                        return decoded;
+                    } catch (e) {
+                        return hexStr; // Return as-is if decoding fails
+                    }
+                };
+                
                 return {
                     index: goBlock.index,
                     chainId: goBlock.chainId === 'unicity' ? 1 : goBlock.chainId, // Convert string to number for consistency
                     version: parseFloat(goBlock.version) || 1,
                     forkId: goBlock.forkId === 'mainnet' ? 1 : goBlock.forkId,
                     timestamp: Math.floor(parseInt(goBlock.createdAt) / 1000).toString(), // Convert milliseconds to seconds
-                    rootHash: goBlock.rootHash,
-                    previousBlockHash: goBlock.previousBlockHash,
-                    noDeletionProofHash: goBlock.noDeletionProofHash || null,
+                    rootHash: decodeDoubleHex(goBlock.rootHash),
+                    previousBlockHash: decodeDoubleHex(goBlock.previousBlockHash),
+                    noDeletionProofHash: decodeDoubleHex(goBlock.noDeletionProofHash) || null,
                     unicityCertificate: goBlock.unicityCertificate // Go block includes certificate
                 };
             }
