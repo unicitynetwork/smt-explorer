@@ -1,20 +1,32 @@
 class AggregatorRPCClient {
-    constructor(endpoint = 'https://aggregator-test.mainnet.unicity.network') {
+    constructor(endpoint = 'https://aggregator-test.mainnet.unicity.network', aggregatorType = 'ts') {
         this.endpoint = endpoint;
         this.requestId = 1;
+        this.aggregatorType = aggregatorType; // 'ts' or 'go'
     }
 
-    setEndpoint(endpoint) {
+    setEndpoint(endpoint, aggregatorType = 'ts') {
         this.endpoint = endpoint;
+        this.aggregatorType = aggregatorType;
     }
 
-    static getNetworkEndpoint(network) {
+    static getNetworkEndpoint(network, aggregatorType = 'ts') {
         const endpoints = {
-            'local': 'http://localhost:3000',
-            'testnet': 'https://aggregator-test.mainnet.unicity.network/',
-            'mainnet': 'https://aggregator.mainnet.unicity.network/'
+            'ts': {
+                'local': 'http://localhost:3000',
+                'testnet': 'https://aggregator-test.mainnet.unicity.network/',
+                'mainnet': 'https://aggregator.mainnet.unicity.network/'
+            },
+            'go': {
+                'goggregator': 'http://goggregator.unicity.network/'
+            }
         };
-        return endpoints[network] || endpoints['testnet'];
+        
+        if (aggregatorType === 'go') {
+            return endpoints.go.goggregator;
+        }
+        
+        return endpoints.ts[network] || endpoints.ts['testnet'];
     }
 
     async makeRequest(method, params = {}) {
@@ -56,7 +68,31 @@ class AggregatorRPCClient {
     }
 
     async getBlock(blockNumber) {
-        return await this.makeRequest('get_block', { blockNumber: blockNumber.toString() });
+        const result = await this.makeRequest('get_block', { blockNumber: blockNumber.toString() });
+        
+        // Handle different response structures
+        if (this.aggregatorType === 'go') {
+            // Go aggregator returns block wrapped in a 'block' field
+            if (result && result.block) {
+                // Normalize the Go block structure to match TS structure
+                const goBlock = result.block;
+                return {
+                    index: goBlock.index,
+                    chainId: goBlock.chainId === 'unicity' ? 1 : goBlock.chainId, // Convert string to number for consistency
+                    version: parseFloat(goBlock.version) || 1,
+                    forkId: goBlock.forkId === 'mainnet' ? 1 : goBlock.forkId,
+                    timestamp: Math.floor(parseInt(goBlock.createdAt) / 1000).toString(), // Convert milliseconds to seconds
+                    rootHash: goBlock.rootHash,
+                    previousBlockHash: goBlock.previousBlockHash,
+                    noDeletionProofHash: goBlock.noDeletionProofHash || null,
+                    unicityCertificate: goBlock.unicityCertificate // Go block includes certificate
+                };
+            }
+            return result;
+        }
+        
+        // TS aggregator returns block directly
+        return result;
     }
 
     async getLatestBlock() {

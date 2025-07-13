@@ -1,6 +1,7 @@
 class BlockExplorer {
     constructor() {
         this.currentNetwork = 'testnet'; // default
+        this.aggregatorType = 'ts'; // default
         this.rpcClient = new AggregatorRPCClient();
         this.currentBlock = null;
         this.pageSize = 10;
@@ -87,6 +88,10 @@ class BlockExplorer {
             this.changeNetwork(e.target.value);
         });
 
+        document.getElementById('aggregatorTypeSelect').addEventListener('change', (e) => {
+            this.changeAggregatorType(e.target.value);
+        });
+
         document.getElementById('autoRefreshCheckbox').addEventListener('change', (e) => {
             this.setAutoRefresh(e.target.checked);
         });
@@ -104,15 +109,29 @@ class BlockExplorer {
     initializeFromURL() {
         const params = new URLSearchParams(window.location.search);
         
+        // Set aggregator type from URL
+        const aggregatorType = params.get('aggregatorType');
+        if (aggregatorType && ['ts', 'go'].includes(aggregatorType)) {
+            this.aggregatorType = aggregatorType;
+            document.getElementById('aggregatorTypeSelect').value = aggregatorType;
+        }
+        
         // Set network from URL
         const network = params.get('network');
-        if (network && ['local', 'testnet', 'mainnet'].includes(network)) {
+        if (this.aggregatorType === 'go') {
+            // For Go aggregator, we only have one endpoint
+            this.currentNetwork = 'goggregator';
+            document.getElementById('networkSelect').style.display = 'none';
+            this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint('goggregator', 'go'), 'go');
+        } else if (network && ['local', 'testnet', 'mainnet'].includes(network)) {
             this.currentNetwork = network;
             document.getElementById('networkSelect').value = network;
-            this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(network));
+            document.getElementById('networkSelect').style.display = 'block';
+            this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(network, 'ts'), 'ts');
         } else {
             // Set default network
-            this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(this.currentNetwork));
+            document.getElementById('networkSelect').style.display = 'block';
+            this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(this.currentNetwork, 'ts'), 'ts');
         }
         
         // Set page size from URL
@@ -217,9 +236,15 @@ class BlockExplorer {
         searchParams.delete('pageSize');
         searchParams.delete('network');
         searchParams.delete('autoRefresh');
+        searchParams.delete('aggregatorType');
 
-        // Always include network in URL (unless it's the default testnet)
-        if (this.currentNetwork !== 'testnet') {
+        // Always include aggregator type in URL (unless it's the default 'ts')
+        if (this.aggregatorType !== 'ts') {
+            searchParams.set('aggregatorType', this.aggregatorType);
+        }
+
+        // Always include network in URL (unless it's the default testnet for TS aggregator)
+        if (this.aggregatorType === 'ts' && this.currentNetwork !== 'testnet') {
             searchParams.set('network', this.currentNetwork);
         }
 
@@ -493,9 +518,46 @@ class BlockExplorer {
         this.currentPage = newCurrentPage;
     }
 
+    changeAggregatorType(aggregatorType) {
+        this.aggregatorType = aggregatorType;
+        
+        if (aggregatorType === 'go') {
+            // For Go aggregator, switch to goggregator endpoint
+            this.currentNetwork = 'goggregator';
+            document.getElementById('networkSelect').style.display = 'none';
+            this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint('goggregator', 'go'), 'go');
+        } else {
+            // For TS aggregator, show network selector
+            document.getElementById('networkSelect').style.display = 'block';
+            if (this.currentNetwork === 'goggregator') {
+                this.currentNetwork = 'testnet'; // Default to testnet when switching back to TS
+                document.getElementById('networkSelect').value = 'testnet';
+            }
+            this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(this.currentNetwork, 'ts'), 'ts');
+        }
+        
+        // Reset state
+        this.currentPage = 0;
+        this.currentBlock = null;
+        this.totalBlocks = 0;
+        
+        // Clear the blocks container
+        const container = document.getElementById('blocksContainer');
+        if (container) {
+            container.innerHTML = '<div class="loading">Loading...</div>';
+        }
+        
+        // Update URL
+        this.updateURL();
+        
+        // Reload data
+        this.loadLatestBlock();
+        this.loadBlocks();
+    }
+
     changeNetwork(network) {
         this.currentNetwork = network;
-        this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(network));
+        this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(network, this.aggregatorType), this.aggregatorType);
         
         // Reset to first page when changing networks
         this.currentPage = 0;
@@ -744,6 +806,12 @@ class BlockExplorer {
                         <div class="detail-row">
                             <label>No Deletion Proof Hash:</label>
                             <span class="hash">${block.noDeletionProofHash}</span>
+                        </div>
+                    ` : ''}
+                    ${block.unicityCertificate ? `
+                        <div class="detail-row">
+                            <label>Unicity Certificate:</label>
+                            <span class="hash">${block.unicityCertificate}</span>
                         </div>
                     ` : ''}
                     ${commitments && commitments.length > 0 ? `
