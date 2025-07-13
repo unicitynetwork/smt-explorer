@@ -106,7 +106,7 @@ class BlockExplorer {
         
         // Set network from URL
         const network = params.get('network');
-        if (network && ['devnet', 'testnet', 'mainnet'].includes(network)) {
+        if (network && ['local', 'testnet', 'mainnet'].includes(network)) {
             this.currentNetwork = network;
             document.getElementById('networkSelect').value = network;
             this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(network));
@@ -151,7 +151,7 @@ class BlockExplorer {
         
         // Handle network change
         const network = params.get('network');
-        if (network && ['devnet', 'testnet', 'mainnet'].includes(network) && network !== this.currentNetwork) {
+        if (network && ['local', 'testnet', 'mainnet'].includes(network) && network !== this.currentNetwork) {
             this.currentNetwork = network;
             document.getElementById('networkSelect').value = network;
             this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(network));

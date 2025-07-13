@@ -24,7 +24,7 @@ Visit the live demo: [Unicity Block Explorer](https://unicitynetwork.github.io/s
 
 The explorer supports multiple blockchain networks:
 
-- **Devnet**
+- **Local**
 - **Testnet** (default)
 - **Mainnet**
 
@@ -72,7 +72,7 @@ Simply open `index.html` in any modern web browser. The explorer runs entirely c
 
 All application state is preserved in URLs for easy sharing:
 
-- `?network=devnet|testnet|mainnet` - Selected network (testnet is default)
+- `?network=local|testnet|mainnet` - Selected network (testnet is default)
 - `?page=N` - Current page number
 - `?pageSize=5|10|25|50|100` - Number of blocks per page
 - `?block=N` - Viewing specific block details

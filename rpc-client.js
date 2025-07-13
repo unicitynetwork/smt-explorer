@@ -10,7 +10,7 @@ class AggregatorRPCClient {
 
     static getNetworkEndpoint(network) {
         const endpoints = {
-            // 'devnet': '...',
+            'local': 'http://localhost:3000',
             'testnet': 'https://aggregator-test.mainnet.unicity.network/',
             'mainnet': 'https://aggregator.mainnet.unicity.network/'
         };
