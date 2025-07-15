@@ -18,7 +18,7 @@ class AggregatorRPCClient {
                 'mainnet': 'https://aggregator.mainnet.unicity.network/'
             },
             'go': {
-                'goggregator': 'http://goggregator.unicity.network/'
+                'goggregator': 'https://goggregator-test.unicity.network/'
             }
         };
         
