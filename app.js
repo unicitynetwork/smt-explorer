@@ -712,13 +712,18 @@ class BlockExplorer {
             // Optimization: if previousBlockHash equals rootHash, block is definitely empty
             const isDefinitelyEmpty = block.previousBlockHash === block.rootHash;
             
-            let commitments = [];
-            if (!isDefinitelyEmpty) {
-                commitments = await this.rpcClient.getBlockCommitments(blockNumber).catch(() => []);
+            let commitmentCount = 0;
+            
+            // For Go aggregator, use totalCommitments from block data
+            if (this.aggregatorType === 'go' && block.totalCommitments !== undefined) {
+                commitmentCount = block.totalCommitments;
+            } else if (!isDefinitelyEmpty) {
+                // For TS aggregator, fetch commitments
+                const commitments = await this.rpcClient.getBlockCommitments(blockNumber).catch(() => []);
+                commitmentCount = commitments.length;
             }
             
             const timestamp = new Date(parseInt(block.timestamp) * 1000).toLocaleString();
-            const commitmentCount = commitments.length;
             const isEmpty = isDefinitelyEmpty || commitmentCount === 0;
             
             const html = `

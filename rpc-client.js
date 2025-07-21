@@ -102,7 +102,8 @@ class AggregatorRPCClient {
                     rootHash: decodeDoubleHex(goBlock.rootHash),
                     previousBlockHash: decodeDoubleHex(goBlock.previousBlockHash),
                     noDeletionProofHash: decodeDoubleHex(goBlock.noDeletionProofHash) || null,
-                    unicityCertificate: goBlock.unicityCertificate // Go block includes certificate
+                    unicityCertificate: goBlock.unicityCertificate, // Go block includes certificate
+                    totalCommitments: result.totalCommitments ? parseInt(result.totalCommitments) : 0 // Include totalCommitments from result
                 };
             }
             return result;
