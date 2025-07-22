@@ -578,6 +578,36 @@ main {
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.transaction-counts {
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.total-count {
+    background-color: var(--accent-light);
+    color: var(--accent-primary);
+    padding: 4px 12px;
+    border-radius: 20px;
+}
+
+.commitment-count {
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    border-radius: 20px;
+}
+
+.separator {
+    color: var(--text-tertiary);
+    font-size: 12px;
 }
 
 .commitments-list {

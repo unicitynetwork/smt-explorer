@@ -790,6 +790,11 @@ class BlockExplorer {
             } else {
                 commitments = [];
             }
+            
+            // Get total transaction count for Go aggregator
+            const totalTransactions = block.totalCommitments !== undefined ? block.totalCommitments : 
+                                    (commitments ? commitments.length : 0);
+            const actualCommitments = commitments ? commitments.length : 0;
 
             const detailSection = document.getElementById('blockDetail');
             const contentEl = document.getElementById('blockDetailContent');
@@ -844,7 +849,16 @@ class BlockExplorer {
                     ` : ''}
                     ${commitments && commitments.length > 0 ? `
                         <div class="commitments-section">
-                            <h4>Transactions (${commitments.length})</h4>
+                            <h4>
+                                Transactions 
+                                ${totalTransactions !== actualCommitments ? `
+                                    <span class="transaction-counts">
+                                        <span class="total-count" title="Total transactions including aggregated">${totalTransactions} total</span>
+                                        <span class="separator">•</span>
+                                        <span class="commitment-count" title="Actual commitments in this block">${actualCommitments} in block</span>
+                                    </span>
+                                ` : `<span class="transaction-counts">${commitments.length}</span>`}
+                            </h4>
                             <div class="commitments-list">
                                 ${commitments.map((commitment, index) => `
                                     <div class="commitment-card">
@@ -881,6 +895,18 @@ class BlockExplorer {
                                     </div>
                                 `).join('')}
                             </div>
+                        </div>
+                    ` : totalTransactions > 0 ? `
+                        <div class="commitments-section">
+                            <h4>
+                                Transactions 
+                                <span class="transaction-counts">
+                                    <span class="total-count" title="Total transactions including aggregated">${totalTransactions} aggregated</span>
+                                    <span class="separator">•</span>
+                                    <span class="commitment-count" title="No direct commitments in this block">0 in block</span>
+                                </span>
+                            </h4>
+                            <div class="no-commitments">This block contains ${totalTransactions} aggregated transaction${totalTransactions !== 1 ? 's' : ''} but no direct commitments.</div>
                         </div>
                     ` : '<div class="no-commitments">This block contains no transactions</div>'}
                 </div>
