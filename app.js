@@ -731,7 +731,7 @@ class BlockExplorer {
                     <div class="block-header">
                         <div class="block-number">Block #${blockNumber}</div>
                         <div class="commitment-badge ${isEmpty ? 'empty' : 'has-data'}">
-                            ${isEmpty ? 'Empty' : `${commitmentCount} commitment${commitmentCount !== 1 ? 's' : ''}`}
+                            ${isEmpty ? 'Empty' : `${commitmentCount} transaction${commitmentCount !== 1 ? 's' : ''}`}
                         </div>
                     </div>
                     <div class="block-info">
@@ -821,7 +821,7 @@ class BlockExplorer {
                     ` : ''}
                     ${commitments && commitments.length > 0 ? `
                         <div class="commitments-section">
-                            <h4>Commitments (${commitments.length})</h4>
+                            <h4>Transactions (${commitments.length})</h4>
                             <div class="commitments-list">
                                 ${commitments.map((commitment, index) => `
                                     <div class="commitment-card">
@@ -859,7 +859,7 @@ class BlockExplorer {
                                 `).join('')}
                             </div>
                         </div>
-                    ` : '<div class="no-commitments">This block contains no commitments</div>'}
+                    ` : '<div class="no-commitments">This block contains no transactions</div>'}
                 </div>
             `;
 
