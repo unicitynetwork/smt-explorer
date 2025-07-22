@@ -14,6 +14,7 @@ class BlockExplorer {
     }
 
     async init() {
+        this.initializeTheme();
         this.bindEvents();
         this.initializeFromURL();
         
@@ -40,6 +41,24 @@ class BlockExplorer {
             const fromBlock = params.get('block');
             await this.showInclusionProof(proofRequestId, false, fromBlock);
         }
+    }
+    
+    initializeTheme() {
+        // Check localStorage for saved theme preference
+        const savedTheme = localStorage.getItem('theme');
+        const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        
+        // Use saved theme, or system preference, or default to light
+        const theme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+    }
+    
+    toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
     }
 
     bindEvents() {
@@ -98,6 +117,10 @@ class BlockExplorer {
 
         document.getElementById('includeEmptyCheckbox').addEventListener('change', (e) => {
             this.setIncludeEmpty(e.target.checked);
+        });
+        
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            this.toggleTheme();
         });
 
         // Handle browser back/forward buttons
