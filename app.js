@@ -963,21 +963,86 @@ class BlockExplorer {
         // Create modal overlay
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
+        
+        // Extract data from proof structure
+        const hasProof = proof && (proof.merkleTreePath || proof.path);
+        const merkleData = proof?.merkleTreePath || {};
+        const authenticator = proof?.authenticator || {};
+        const transactionHash = proof?.transactionHash || '';
+        
         modal.innerHTML = `
-            <div class="modal-content">
+            <div class="modal">
                 <div class="modal-header">
-                    <h3>Inclusion Proof</h3>
-                    <button class="modal-close">×</button>
+                    <h3>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: middle; margin-right: 8px;">
+                            <path d="M9 11l3 3L22 4"></path>
+                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
+                        </svg>
+                        Transaction Inclusion Proof
+                    </h3>
+                    <button class="modal-close">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                 </div>
                 <div class="modal-body">
-                    <div class="proof-request-id">
-                        <label>Request ID:</label>
-                        <span class="hash">${requestId}</span>
+                    <div class="proof-info-card">
+                        <h4 class="card-title">Transaction Details</h4>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label>Request ID</label>
+                                <span class="hash value">${requestId}</span>
+                            </div>
+                            ${transactionHash ? `
+                                <div class="info-item">
+                                    <label>Transaction Hash</label>
+                                    <span class="hash value">${transactionHash}</span>
+                                </div>
+                            ` : ''}
+                        </div>
                     </div>
-                    <div class="proof-details">
-                        <h4>Proof Data</h4>
-                        <pre class="proof-json">${JSON.stringify(proof, null, 2)}</pre>
-                    </div>
+                    
+                    ${authenticator && authenticator.algorithm ? `
+                        <div class="proof-info-card">
+                            <h4 class="card-title">Authenticator</h4>
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <label>Algorithm</label>
+                                    <span class="value">${authenticator.algorithm}</span>
+                                </div>
+                                <div class="info-item">
+                                    <label>Public Key</label>
+                                    <span class="hash value">${authenticator.publicKey}</span>
+                                </div>
+                                <div class="info-item">
+                                    <label>State Hash</label>
+                                    <span class="hash value">${authenticator.stateHash}</span>
+                                </div>
+                                <div class="info-item full-width">
+                                    <label>Signature</label>
+                                    <span class="hash value">${authenticator.signature}</span>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${hasProof ? `
+                        <div class="proof-info-card">
+                            <h4 class="card-title">Merkle Tree Proof</h4>
+                            ${merkleData.root ? `
+                                <div class="info-item">
+                                    <label>Root Hash</label>
+                                    <span class="hash value">${merkleData.root}</span>
+                                </div>
+                            ` : ''}
+                            <div class="proof-path-section">
+                                <h5>Merkle Tree Path</h5>
+                                <textarea class="proof-json-textarea" readonly>${JSON.stringify(merkleData, null, 2)}</textarea>
+                            </div>
+                        </div>
+                    ` : '<div class="no-proof-message">No inclusion proof data available for this transaction.</div>'}
                 </div>
             </div>
         `;
