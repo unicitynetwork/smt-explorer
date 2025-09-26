@@ -77,20 +77,12 @@ class AggregatorRPCClient {
                 // Normalize the Go block structure to match TS structure
                 const goBlock = result.block;
                 
-                // Helper function to decode double-encoded hex strings
-                const decodeDoubleHex = (hexStr) => {
+                // Helper function to handle hash format from Go aggregator
+                const formatHash = (hexStr) => {
                     if (!hexStr) return null;
-                    try {
-                        // Convert pairs of hex characters to their ASCII values
-                        let decoded = '';
-                        for (let i = 0; i < hexStr.length; i += 2) {
-                            const hex = hexStr.substr(i, 2);
-                            decoded += String.fromCharCode(parseInt(hex, 16));
-                        }
-                        return decoded;
-                    } catch (e) {
-                        return hexStr; // Return as-is if decoding fails
-                    }
+                    // Go aggregator returns hashes with "0000" prefix (SHA256 algorithm identifier)
+                    // Just return the hex string as-is for display
+                    return hexStr;
                 };
                 
                 return {
@@ -99,9 +91,9 @@ class AggregatorRPCClient {
                     version: parseFloat(goBlock.version) || 1,
                     forkId: goBlock.forkId === 'mainnet' ? 1 : goBlock.forkId,
                     timestamp: Math.floor(parseInt(goBlock.createdAt) / 1000).toString(), // Convert milliseconds to seconds
-                    rootHash: decodeDoubleHex(goBlock.rootHash),
-                    previousBlockHash: decodeDoubleHex(goBlock.previousBlockHash),
-                    noDeletionProofHash: decodeDoubleHex(goBlock.noDeletionProofHash) || null,
+                    rootHash: formatHash(goBlock.rootHash),
+                    previousBlockHash: formatHash(goBlock.previousBlockHash),
+                    noDeletionProofHash: formatHash(goBlock.noDeletionProofHash) || null,
                     unicityCertificate: goBlock.unicityCertificate, // Go block includes certificate
                     totalCommitments: result.totalCommitments ? parseInt(result.totalCommitments) : 0 // Include totalCommitments from result
                 };
