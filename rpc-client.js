@@ -126,7 +126,19 @@ class AggregatorRPCClient {
     }
 
     async getInclusionProof(requestId) {
-        return await this.makeRequest('get_inclusion_proof', { requestId });
+        const result = await this.makeRequest('get_inclusion_proof', { requestId });
+
+        // Handle different response structures
+        if (this.aggregatorType === 'go') {
+            // Go aggregator returns inclusion proof wrapped in an 'inclusionProof' field
+            if (result && result.inclusionProof) {
+                return result.inclusionProof;
+            }
+            return null;
+        }
+
+        // TS aggregator returns inclusion proof directly
+        return result;
     }
 
     async getNoDeletionProof() {
