@@ -130,4 +130,36 @@ class AggregatorRPCClient {
     async getNoDeletionProof(shardId) {
         return await this.makeRequest('get_no_deletion_proof', { shardId });
     }
+
+    /**
+     * Fetches shard configuration from the aggregator's config endpoint.
+     * @param {string} network - The network name (e.g., 'local', 'testnet')
+     * @returns {Promise<{shards: string[], status: number}>} - Shard IDs and HTTP status
+     */
+    static async fetchShardConfig(network) {
+        const baseEndpoint = AggregatorRPCClient.getNetworkEndpoint(network);
+        // Remove trailing slash if present, then append config path
+        const configUrl = baseEndpoint.replace(/\/$/, '') + '/config/shards';
+
+        try {
+            const response = await fetch(configUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                }
+            });
+
+            if (!response.ok) {
+                return { shards: [], status: response.status };
+            }
+
+            const data = await response.json();
+            // Extract shard IDs from response: {"version":1,"shards":[{"id":1,"url":"..."}]}
+            const shards = (data.shards || []).map(shard => shard.id.toString());
+            return { shards, status: response.status };
+        } catch (error) {
+            console.error('Failed to fetch shard config:', error);
+            return { shards: [], status: 0 }; // 0 indicates network error
+        }
+    }
 }
