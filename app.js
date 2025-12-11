@@ -660,9 +660,22 @@ class BlockExplorer {
         validShards.forEach(shardId => {
             const option = document.createElement('option');
             option.value = shardId;
-            option.textContent = `Shard ${shardId}`;
+            // Display shard ID without the 0b1 prefix (e.g., 0b10 -> 0, 0b11 -> 1)
+            option.textContent = `Shard ${this.getDisplayShardId(shardId)}`;
             shardSelect.appendChild(option);
         });
+    }
+
+    // Convert internal shard ID to display ID by removing 0b1 prefix
+    // e.g., 2 (0b10) -> 0, 3 (0b11) -> 1
+    getDisplayShardId(shardId) {
+        const id = parseInt(shardId);
+        // Find the position of the highest set bit (the prefix '1')
+        // and mask it out to get the remaining bits
+        if (id <= 1) return shardId; // No prefix to remove
+        const highestBit = Math.floor(Math.log2(id));
+        const mask = (1 << highestBit) - 1;
+        return (id & mask).toString();
     }
 
     setAutoRefresh(enabled) {
@@ -859,7 +872,7 @@ class BlockExplorer {
                     </div>
                     <div class="detail-row">
                         <label>Shard ID:</label>
-                        <span>${block.shardId}</span>
+                        <span>${this.getDisplayShardId(block.shardId)}</span>
                     </div>
                     <div class="detail-row">
                         <label>Version:</label>
