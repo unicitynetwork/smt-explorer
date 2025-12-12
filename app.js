@@ -745,7 +745,6 @@ class BlockExplorer {
         const id = parseInt(shardId);
         // Find the position of the highest set bit (the prefix '1')
         // and mask it out to get the remaining bits
-        if (id <= 1) return shardId; // No prefix to remove
         const highestBit = Math.floor(Math.log2(id));
         const mask = (1 << highestBit) - 1;
         return (id & mask).toString();
