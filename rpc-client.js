@@ -132,7 +132,7 @@ class AggregatorRPCClient {
     }
 
     /**
-     * Fetches shard configuration from the aggregator's config endpoint.
+     * Fetches shard IDs from the aggregator's config endpoint.
      * @param {string} network - The network name (e.g., 'local', 'testnet')
      * @returns {Promise<{shards: string[], status: number}>} - Shard IDs and HTTP status
      */
@@ -154,8 +154,8 @@ class AggregatorRPCClient {
             }
 
             const data = await response.json();
-            // Extract shard IDs from response: {"version":1,"shards":[{"id":1,"url":"..."}]}
-            const shards = (data.shards || []).map(shard => shard.id.toString());
+            // Extract shard IDs from response: {"version":1,"shardIds":[2,3]}
+            const shards = (data.shardIds || []).map(id => id.toString());
             return { shards, status: response.status };
         } catch (error) {
             console.error('Failed to fetch shard config:', error);
