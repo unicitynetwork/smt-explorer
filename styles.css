@@ -123,14 +123,20 @@ header {
     color: var(--accent-primary);
 }
 
-/* Network Selector */
-.network-selector {
+/* Network and Shard Selectors */
+.network-selector,
+.shard-selector {
     display: flex;
     gap: 8px;
     margin-left: 24px;
 }
 
-.network-selector select {
+.shard-selector {
+    margin-left: 12px;
+}
+
+.network-selector select,
+.shard-selector select {
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -143,11 +149,17 @@ header {
     min-width: 120px;
 }
 
-.network-selector select:hover {
+.shard-selector select {
+    min-width: 100px;
+}
+
+.network-selector select:hover,
+.shard-selector select:hover {
     border-color: var(--accent-primary);
 }
 
-.network-selector select:focus {
+.network-selector select:focus,
+.shard-selector select:focus {
     outline: none;
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 3px var(--accent-light);
@@ -960,7 +972,11 @@ main {
     .network-selector {
         margin-left: auto;
     }
-    
+
+    .shard-selector {
+        margin-left: 8px;
+    }
+
     .header-actions {
         width: 100%;
     }

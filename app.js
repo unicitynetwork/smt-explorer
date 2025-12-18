@@ -1,6 +1,8 @@
 class BlockExplorer {
     constructor() {
         this.currentNetwork = 'testnet'; // default
+        this.shardCache = {}; // Cache for fetched shard configurations per network
+        this.currentShard = null; // Will be set after fetching shards
         this.rpcClient = new AggregatorRPCClient();
         this.currentBlock = null;
         this.pageSize = 10;
@@ -12,21 +14,88 @@ class BlockExplorer {
         this.init();
     }
 
+    /**
+     * Fetches shards for a network, with caching and fallback for local network.
+     * @param {string} network - The network name
+     * @returns {Promise<string[]>} - Array of shard IDs
+     */
+    async fetchShardsForNetwork(network) {
+        // Check cache first
+        if (this.shardCache[network]) {
+            return this.shardCache[network];
+        }
+
+        const result = await AggregatorRPCClient.fetchShardConfig(network);
+
+        if (result.shards.length > 0) {
+            this.shardCache[network] = result.shards;
+            return result.shards;
+        }
+
+        // Handle 404 or empty response
+        if (result.status === 404 && network === 'local') {
+            // Special case for local network: assume single shard
+            console.warn('Shard config endpoint not found for local network. Assuming single shard (ID: 1).');
+            this.shardCache[network] = ['1'];
+            return ['1'];
+        }
+
+        if (result.status === 404) {
+            throw new Error(`Shard configuration not available for ${network} network (404)`);
+        }
+
+        if (result.status === 0) {
+            throw new Error(`Network error while fetching shard configuration for ${network}`);
+        }
+
+        throw new Error(`Failed to fetch shard configuration for ${network} (status: ${result.status})`);
+    }
+
+    /**
+     * Gets cached shards for a network. Throws if not yet fetched.
+     * @param {string} network - The network name
+     * @returns {string[]} - Array of shard IDs
+     */
+    getCachedShardsForNetwork(network) {
+        const shards = this.shardCache[network];
+        if (!shards || shards.length === 0) {
+            throw new Error(`Shards not loaded for network: ${network}`);
+        }
+        return shards;
+    }
+
     async init() {
         this.initializeTheme();
         this.bindEvents();
-        this.initializeFromURL();
-        
-        // Check if we need to show a specific view based on URL
+
+        // Determine network from URL first (before fetching shards)
         const params = new URLSearchParams(window.location.search);
+        const networkFromURL = params.get('network');
+        if (networkFromURL && ['local', 'testnet'].includes(networkFromURL)) {
+            this.currentNetwork = networkFromURL;
+            document.getElementById('networkSelect').value = networkFromURL;
+        }
+
+        // Fetch shards for the current network
+        try {
+            const shards = await this.fetchShardsForNetwork(this.currentNetwork);
+            this.initializeFromURL(shards);
+        } catch (error) {
+            this.showError(`Failed to load shard configuration: ${error.message}`);
+            // Use a fallback to prevent complete failure
+            this.shardCache[this.currentNetwork] = ['1'];
+            this.initializeFromURL(['1']);
+        }
+
+        // Check if we need to show a specific view based on URL
         const blockNumber = params.get('block');
         const proofRequestId = params.get('proof');
-        
+
         this.loadLatestBlock();
-        
+
         // Start polling for new blocks
         this.updatePolling();
-        
+
         if (blockNumber) {
             // Show specific block
             await this.showBlockDetail(blockNumber, false);
@@ -34,7 +103,7 @@ class BlockExplorer {
             // Show blocks list
             this.loadBlocks();
         }
-        
+
         if (proofRequestId) {
             // Show inclusion proof modal
             const fromBlock = params.get('block');
@@ -106,6 +175,9 @@ class BlockExplorer {
             this.changeNetwork(e.target.value);
         });
 
+        document.getElementById('shardSelect').addEventListener('change', (e) => {
+            this.changeShard(e.target.value);
+        });
 
         document.getElementById('autoRefreshCheckbox').addEventListener('change', (e) => {
             this.setAutoRefresh(e.target.checked);
@@ -125,19 +197,27 @@ class BlockExplorer {
         });
     }
 
-    initializeFromURL() {
+    initializeFromURL(shards) {
         const params = new URLSearchParams(window.location.search);
-        
-        // Set network from URL
-        const network = params.get('network');
-        if (network && ['local', 'testnet'].includes(network)) {
-            this.currentNetwork = network;
-            document.getElementById('networkSelect').value = network;
+
+        // Network is already set in init() before calling this method
+
+        // Update shard selector options based on the fetched shards
+        this.updateShardSelector(shards);
+
+        // Set shard from URL (must be valid for current network)
+        const shard = params.get('shard');
+        if (shard && shards.includes(shard)) {
+            this.currentShard = shard;
+        } else {
+            // Use first valid shard for the network
+            this.currentShard = shards[0];
         }
+        document.getElementById('shardSelect').value = this.currentShard;
 
         // Initialize RPC client with the current network
         this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(this.currentNetwork));
-        
+
         // Set page size from URL
         const pageSize = params.get('pageSize');
         if (pageSize && [5, 10, 25, 50, 100].includes(parseInt(pageSize))) {
@@ -164,22 +244,40 @@ class BlockExplorer {
             this.includeEmpty = includeEmpty === 'true';
             document.getElementById('includeEmptyCheckbox').checked = this.includeEmpty;
         }
-        
+
         // Update button state after setting auto-refresh state
         this.updateRefreshButtonState();
     }
 
-    handleURLChange() {
+    async handleURLChange() {
         const params = new URLSearchParams(window.location.search);
-        
+
         // Handle network change
         const network = params.get('network');
         if (network && ['local', 'testnet', 'mainnet'].includes(network) && network !== this.currentNetwork) {
+            // Fetch shards for new network
+            let shards;
+            try {
+                shards = await this.fetchShardsForNetwork(network);
+            } catch (error) {
+                this.showError(`Failed to load shard configuration for ${network}: ${error.message}`);
+                return;
+            }
+
             this.currentNetwork = network;
             document.getElementById('networkSelect').value = network;
             this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(network));
+            this.updateShardSelector(shards);
         }
-        
+
+        // Handle shard change
+        const shard = params.get('shard');
+        const validShards = this.getCachedShardsForNetwork(this.currentNetwork);
+        if (shard && validShards.includes(shard) && shard !== this.currentShard) {
+            this.currentShard = shard;
+            document.getElementById('shardSelect').value = shard;
+        }
+
         // Handle block detail view
         const blockNumber = params.get('block');
         if (blockNumber) {
@@ -198,12 +296,12 @@ class BlockExplorer {
         // Handle pagination
         const pageSize = params.get('pageSize');
         const page = params.get('page');
-        
+
         if (pageSize && [5, 10, 25, 50, 100].includes(parseInt(pageSize))) {
             this.pageSize = parseInt(pageSize);
             document.getElementById('pageSize').value = pageSize;
         }
-        
+
         if (page && !isNaN(parseInt(page))) {
             this.currentPage = parseInt(page);
         }
@@ -239,11 +337,18 @@ class BlockExplorer {
         searchParams.delete('page');
         searchParams.delete('pageSize');
         searchParams.delete('network');
+        searchParams.delete('shard');
         searchParams.delete('autoRefresh');
 
         // Always include network in URL (unless it's the default testnet)
         if (this.currentNetwork !== 'testnet') {
             searchParams.set('network', this.currentNetwork);
+        }
+
+        // Always include shard in URL (unless the network only has one shard)
+        const shards = this.shardCache[this.currentNetwork];
+        if (shards?.length !== 1) {
+            searchParams.set('shard', this.currentShard);
         }
 
         // Include autoRefresh in URL only if it's disabled (since true is default)
@@ -304,7 +409,7 @@ class BlockExplorer {
     async loadLatestBlock() {
         try {
             this.showSpinner();
-            const heightResult = await this.rpcClient.getBlockHeight();
+            const heightResult = await this.rpcClient.getBlockHeight(this.currentShard);
             const height = heightResult.blockNumber;
             document.getElementById('currentHeight').textContent = height;
             this.currentBlock = height;
@@ -317,7 +422,7 @@ class BlockExplorer {
 
     async loadBlocks() {
         try {
-            const heightResult = await this.rpcClient.getBlockHeight();
+            const heightResult = await this.rpcClient.getBlockHeight(this.currentShard);
             const height = parseInt(heightResult.blockNumber);
             this.totalBlocks = height; // blocks start from 1
             
@@ -517,48 +622,132 @@ class BlockExplorer {
     }
 
 
-    changeNetwork(network) {
-        this.currentNetwork = network;
-        this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(network));
-        
-        // Reset to first page when changing networks
-        this.currentPage = 0;
-        
-        // Reset current block to trigger proper polling
-        this.currentBlock = null;
-        
-        // Reset total blocks count
-        this.totalBlocks = 0;
-        
-        // Clear the blocks container to remove blocks from previous network
+    async changeNetwork(network) {
+        // Clear UI immediately to show responsiveness
         const container = document.getElementById('blocksContainer');
         if (container) {
             container.innerHTML = '';
         }
-        
-        // Clear the current height display
         const currentHeightEl = document.getElementById('currentHeight');
         if (currentHeightEl) {
             currentHeightEl.textContent = 'Loading...';
         }
-        
-        // Clear the block range display
         const blockRangeEl = document.getElementById('blockRange');
         if (blockRangeEl) {
             blockRangeEl.textContent = 'Loading...';
         }
-        
+
+        // Fetch shards for the new network
+        let shards;
+        try {
+            shards = await this.fetchShardsForNetwork(network);
+        } catch (error) {
+            this.showError(`Failed to load shard configuration for ${network}: ${error.message}`);
+            // Revert network selector to previous value
+            document.getElementById('networkSelect').value = this.currentNetwork;
+            return;
+        }
+
+        this.currentNetwork = network;
+        this.rpcClient.setEndpoint(AggregatorRPCClient.getNetworkEndpoint(network));
+
+        // Update shard selector options for the new network
+        this.updateShardSelector(shards);
+
+        // Select first valid shard for the new network
+        this.currentShard = shards[0];
+        document.getElementById('shardSelect').value = this.currentShard;
+
+        // Reset to first page when changing networks
+        this.currentPage = 0;
+
+        // Reset current block to trigger proper polling
+        this.currentBlock = null;
+
+        // Reset total blocks count
+        this.totalBlocks = 0;
+
         // Update URL and reload data
         this.updateURL({
             page: this.currentPage,
             pageSize: this.pageSize
         });
-        
+
         this.loadLatestBlock();
         this.loadBlocks();
-        
+
         // Restart polling with new network
         this.updatePolling();
+    }
+
+    changeShard(shardId) {
+        this.currentShard = shardId;
+
+        // Reset to first page when changing shards
+        this.currentPage = 0;
+
+        // Reset current block to trigger proper polling
+        this.currentBlock = null;
+
+        // Reset total blocks count
+        this.totalBlocks = 0;
+
+        // Clear the blocks container to remove blocks from previous shard
+        const container = document.getElementById('blocksContainer');
+        if (container) {
+            container.innerHTML = '';
+        }
+
+        // Clear the current height display
+        const currentHeightEl = document.getElementById('currentHeight');
+        if (currentHeightEl) {
+            currentHeightEl.textContent = 'Loading...';
+        }
+
+        // Clear the block range display
+        const blockRangeEl = document.getElementById('blockRange');
+        if (blockRangeEl) {
+            blockRangeEl.textContent = 'Loading...';
+        }
+
+        // Update URL and reload data
+        this.updateURL({
+            page: this.currentPage,
+            pageSize: this.pageSize
+        });
+
+        this.loadLatestBlock();
+        this.loadBlocks();
+
+        // Restart polling with new shard
+        this.updatePolling();
+    }
+
+    updateShardSelector(shards) {
+        const shardSelect = document.getElementById('shardSelect');
+
+        // Clear existing options
+        shardSelect.innerHTML = '';
+
+        // Add options for valid shards
+        shards.forEach(shardId => {
+            const option = document.createElement('option');
+            option.value = shardId;
+            // Display shard ID without the 0b1 prefix (e.g., 0b10 -> 0, 0b11 -> 1)
+            option.textContent = `Shard ${this.getDisplayShardId(shardId)}`;
+            shardSelect.appendChild(option);
+        });
+    }
+
+    // Convert internal shard ID to display ID by removing 0b1 prefix
+    // e.g., 2 (0b10) -> 0, 3 (0b11) -> 1
+    getDisplayShardId(shardId) {
+        const id = parseInt(shardId);
+        // Find the position of the highest set bit (the prefix '1')
+        // and mask it out to get the remaining bits
+        const highestBit = Math.floor(Math.log2(id));
+        const mask = (1 << highestBit) - 1;
+        return (id & mask).toString();
     }
 
     setAutoRefresh(enabled) {
@@ -625,12 +814,12 @@ class BlockExplorer {
             // Only poll if we're in the main blocks view (not block detail or proof view)
             const isInBlockDetailView = !document.getElementById('blockDetail').classList.contains('hidden');
             const isInProofView = document.querySelector('.modal-overlay') !== null;
-            
+
             if (isInBlockDetailView || isInProofView) {
                 return; // Don't auto-refresh when viewing block details or proofs
             }
-            
-            const heightResult = await this.rpcClient.getBlockHeight();
+
+            const heightResult = await this.rpcClient.getBlockHeight(this.currentShard);
             const newHeight = parseInt(heightResult.blockNumber);
             
             // If we have a new block, update the display
@@ -669,19 +858,19 @@ class BlockExplorer {
 
     async loadBlockSummary(blockNumber) {
         try {
-            const block = await this.rpcClient.getBlock(blockNumber);
-            
+            const block = await this.rpcClient.getBlock(blockNumber, this.currentShard);
+
             // Optimization: if previousBlockHash equals rootHash, block is definitely empty
             const isDefinitelyEmpty = block.previousBlockHash === block.rootHash;
-            
+
             let commitmentCount = 0;
-            
+
             // Use totalCommitments from block data if available
             if (block.totalCommitments !== undefined) {
                 commitmentCount = block.totalCommitments;
             } else if (!isDefinitelyEmpty) {
                 // For TS aggregator, fetch commitments
-                const commitments = await this.rpcClient.getBlockCommitments(blockNumber).catch(() => []);
+                const commitments = await this.rpcClient.getBlockCommitments(blockNumber, this.currentShard).catch(() => []);
                 commitmentCount = commitments.length;
             }
             
@@ -717,15 +906,14 @@ class BlockExplorer {
 
     async showBlockDetail(blockNumber, updateURL = true) {
         try {
-            
-            const block = await this.rpcClient.getBlock(blockNumber);
-            
+            const block = await this.rpcClient.getBlock(blockNumber, this.currentShard);
+
             // Optimization: if previousBlockHash equals rootHash, block is definitely empty
             const isDefinitelyEmpty = block.previousBlockHash === block.rootHash;
-            
+
             let commitments = null;
             if (!isDefinitelyEmpty) {
-                commitments = await this.rpcClient.getBlockCommitments(blockNumber).catch(() => null);
+                commitments = await this.rpcClient.getBlockCommitments(blockNumber, this.currentShard).catch(() => null);
             } else {
                 commitments = [];
             }
@@ -753,6 +941,10 @@ class BlockExplorer {
                     <div class="detail-row">
                         <label>Chain ID:</label>
                         <span>${block.chainId}</span>
+                    </div>
+                    <div class="detail-row">
+                        <label>Shard ID:</label>
+                        <span>${this.getDisplayShardId(block.shardId)}</span>
                     </div>
                     <div class="detail-row">
                         <label>Version:</label>

@@ -51,12 +51,18 @@ class AggregatorRPCClient {
         }
     }
 
-    async getBlockHeight() {
-        return await this.makeRequest('get_block_height');
+    async getBlockHeight(shardId) {
+        return await this.makeRequest('get_block_height', { shardId });
     }
 
-    async getBlock(blockNumber) {
-        const result = await this.makeRequest('get_block', { blockNumber: blockNumber.toString() });
+    async getBlock(blockNumber, shardId) {
+        const result = await this.makeRequest(
+            'get_block',
+            {
+                blockNumber: blockNumber.toString(),
+                shardId
+            }
+        );
 
         // Go aggregator returns block wrapped in a 'block' field
         if (result && result.block) {
@@ -73,6 +79,7 @@ class AggregatorRPCClient {
             return {
                 index: goBlock.index,
                 chainId: goBlock.chainId === 'unicity' ? 1 : goBlock.chainId, // Convert string to number for consistency
+                shardId: goBlock.shardId,
                 version: parseFloat(goBlock.version) || 1,
                 forkId: goBlock.forkId === 'mainnet' ? 1 : goBlock.forkId,
                 timestamp: Math.floor(parseInt(goBlock.createdAt) / 1000).toString(), // Convert milliseconds to seconds
@@ -87,12 +94,18 @@ class AggregatorRPCClient {
         return result;
     }
 
-    async getLatestBlock() {
-        return await this.makeRequest('get_block', { blockNumber: 'latest' });
+    async getLatestBlock(shardId) {
+        return await this.getBlock('latest', shardId);
     }
 
-    async getBlockCommitments(blockNumber) {
-        const result = await this.makeRequest('get_block_commitments', { blockNumber: blockNumber.toString() });
+    async getBlockCommitments(blockNumber, shardId) {
+        const result = await this.makeRequest(
+            'get_block_commitments',
+            {
+                blockNumber: blockNumber.toString(),
+                shardId
+            }
+        );
 
         // Go aggregator returns commitments wrapped in a 'commitments' field
         if (result && result.commitments) {
@@ -114,7 +127,39 @@ class AggregatorRPCClient {
         return result;
     }
 
-    async getNoDeletionProof() {
-        return await this.makeRequest('get_no_deletion_proof');
+    async getNoDeletionProof(shardId) {
+        return await this.makeRequest('get_no_deletion_proof', { shardId });
+    }
+
+    /**
+     * Fetches shard IDs from the aggregator's config endpoint.
+     * @param {string} network - The network name (e.g., 'local', 'testnet')
+     * @returns {Promise<{shards: string[], status: number}>} - Shard IDs and HTTP status
+     */
+    static async fetchShardConfig(network) {
+        const baseEndpoint = AggregatorRPCClient.getNetworkEndpoint(network);
+        // Remove trailing slash if present, then append config path
+        const configUrl = baseEndpoint.replace(/\/$/, '') + '/config/shards';
+
+        try {
+            const response = await fetch(configUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                }
+            });
+
+            if (!response.ok) {
+                return { shards: [], status: response.status };
+            }
+
+            const data = await response.json();
+            // Extract shard IDs from response: {"version":1,"shardIds":[2,3]}
+            const shards = (data.shardIds || []).map(id => id.toString());
+            return { shards, status: response.status };
+        } catch (error) {
+            console.error('Failed to fetch shard config:', error);
+            return { shards: [], status: 0 }; // 0 indicates network error
+        }
     }
 }
