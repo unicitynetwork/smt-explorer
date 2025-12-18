@@ -150,7 +150,7 @@ header {
 }
 
 .shard-selector select {
-    min-width: 100px;
+    min-width: 110px;
 }
 
 .network-selector select:hover,
@@ -443,6 +443,19 @@ main {
 .commitment-badge.has-data {
     background-color: var(--success-bg);
     color: var(--success-color);
+}
+
+/* Shard Badge */
+.shard-badge {
+    display: inline-block;
+    background-color: var(--accent-light);
+    color: var(--accent-primary);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-left: 8px;
+    vertical-align: middle;
 }
 
 .block-info {

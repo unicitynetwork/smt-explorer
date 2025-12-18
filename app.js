@@ -205,13 +205,15 @@ class BlockExplorer {
         // Update shard selector options based on the fetched shards
         this.updateShardSelector(shards);
 
-        // Set shard from URL (must be valid for current network)
+        // Set shard from URL (must be valid for current network, or 'all')
         const shard = params.get('shard');
-        if (shard && shards.includes(shard)) {
+        if (shard === 'all' && shards.length > 1) {
+            this.currentShard = 'all';
+        } else if (shard && shards.includes(shard)) {
             this.currentShard = shard;
         } else {
-            // Use first valid shard for the network
-            this.currentShard = shards[0];
+            // Use 'all' as default if multiple shards exist, otherwise first shard
+            this.currentShard = shards.length > 1 ? 'all' : shards[0];
         }
         document.getElementById('shardSelect').value = this.currentShard;
 
@@ -273,7 +275,10 @@ class BlockExplorer {
         // Handle shard change
         const shard = params.get('shard');
         const validShards = this.getCachedShardsForNetwork(this.currentNetwork);
-        if (shard && validShards.includes(shard) && shard !== this.currentShard) {
+        if (shard === 'all' && validShards.length > 1 && shard !== this.currentShard) {
+            this.currentShard = 'all';
+            document.getElementById('shardSelect').value = 'all';
+        } else if (shard && validShards.includes(shard) && shard !== this.currentShard) {
             this.currentShard = shard;
             document.getElementById('shardSelect').value = shard;
         }
@@ -346,8 +351,9 @@ class BlockExplorer {
         }
 
         // Always include shard in URL (unless the network only has one shard)
+        // Include 'all' explicitly, or the specific shard ID
         const shards = this.shardCache[this.currentNetwork];
-        if (shards?.length !== 1) {
+        if (shards?.length > 1) {
             searchParams.set('shard', this.currentShard);
         }
 
@@ -409,10 +415,20 @@ class BlockExplorer {
     async loadLatestBlock() {
         try {
             this.showSpinner();
-            const heightResult = await this.rpcClient.getBlockHeight(this.currentShard);
-            const height = heightResult.blockNumber;
-            document.getElementById('currentHeight').textContent = height;
-            this.currentBlock = height;
+            if (this.currentShard === 'all') {
+                // Get max height across all shards
+                const shards = this.getCachedShardsForNetwork(this.currentNetwork);
+                const heightPromises = shards.map(shardId => this.rpcClient.getBlockHeight(shardId));
+                const results = await Promise.all(heightPromises);
+                const maxHeight = Math.max(...results.map(r => parseInt(r.blockNumber)));
+                document.getElementById('currentHeight').textContent = maxHeight;
+                this.currentBlock = maxHeight;
+            } else {
+                const heightResult = await this.rpcClient.getBlockHeight(this.currentShard);
+                const height = heightResult.blockNumber;
+                document.getElementById('currentHeight').textContent = height;
+                this.currentBlock = height;
+            }
         } catch (error) {
             this.showError(`Failed to load latest block: ${error.message}`);
         } finally {
@@ -422,33 +438,189 @@ class BlockExplorer {
 
     async loadBlocks() {
         try {
-            const heightResult = await this.rpcClient.getBlockHeight(this.currentShard);
-            const height = parseInt(heightResult.blockNumber);
-            this.totalBlocks = height; // blocks start from 1
-            
-            const container = document.getElementById('blocksContainer');
-            
-            // Calculate block range for current page
-            const startBlock = Math.max(1, height - (this.currentPage * this.pageSize) - (this.pageSize - 1));
-            const endBlock = Math.max(1, height - (this.currentPage * this.pageSize));
-
-            // For auto-refresh on first page, check for new blocks and add them smoothly
-            if (this.currentPage === 0 && this.autoRefresh) {
-                await this.loadBlocksSmooth(container, startBlock, endBlock, height);
+            if (this.currentShard === 'all') {
+                await this.loadBlocksAllShards();
             } else {
-                // For pagination or manual refresh, clear and rebuild
-                container.innerHTML = '';
-                await this.loadBlocksComplete(container, startBlock, endBlock);
+                await this.loadBlocksSingleShard();
             }
-
-            this.updatePaginationControls(startBlock, endBlock, height);
-            this.updatePaginationURL();
-
         } catch (error) {
             this.showError(`Failed to load blocks: ${error.message}`);
         } finally {
             this.hideSpinner();
         }
+    }
+
+    async loadBlocksSingleShard() {
+        const heightResult = await this.rpcClient.getBlockHeight(this.currentShard);
+        const height = parseInt(heightResult.blockNumber);
+        this.totalBlocks = height; // blocks start from 1
+
+        const container = document.getElementById('blocksContainer');
+
+        // Calculate block range for current page
+        const startBlock = Math.max(1, height - (this.currentPage * this.pageSize) - (this.pageSize - 1));
+        const endBlock = Math.max(1, height - (this.currentPage * this.pageSize));
+
+        // For auto-refresh on first page, check for new blocks and add them smoothly
+        if (this.currentPage === 0 && this.autoRefresh) {
+            await this.loadBlocksSmooth(container, startBlock, endBlock, height);
+        } else {
+            // For pagination or manual refresh, clear and rebuild
+            container.innerHTML = '';
+            await this.loadBlocksComplete(container, startBlock, endBlock);
+        }
+
+        this.updatePaginationControls(startBlock, endBlock, height);
+        this.updatePaginationURL();
+    }
+
+    async loadBlocksAllShards() {
+        const shards = this.getCachedShardsForNetwork(this.currentNetwork);
+        const container = document.getElementById('blocksContainer');
+
+        // Get heights from all shards in parallel
+        const heightPromises = shards.map(async shardId => {
+            const result = await this.rpcClient.getBlockHeight(shardId);
+            return { shardId, height: parseInt(result.blockNumber) };
+        });
+        const shardHeights = await Promise.all(heightPromises);
+
+        // Calculate total blocks across all shards for pagination
+        const totalBlocksAllShards = shardHeights.reduce((sum, sh) => sum + sh.height, 0);
+        this.totalBlocks = totalBlocksAllShards;
+
+        // Calculate which blocks to load from each shard
+        // We need to load enough blocks from each shard to fill the page,
+        // then sort by timestamp and take the top pageSize
+        const blocksToFetch = this.pageSize + (this.currentPage * this.pageSize);
+
+        // Fetch recent blocks from all shards (fetch enough to cover pagination)
+        const blockPromises = [];
+        for (const { shardId, height } of shardHeights) {
+            const blocksFromThisShard = Math.min(blocksToFetch, height);
+            for (let i = 0; i < blocksFromThisShard; i++) {
+                const blockNumber = height - i;
+                if (blockNumber >= 1) {
+                    blockPromises.push(this.loadBlockSummaryWithShard(blockNumber, shardId));
+                }
+            }
+        }
+
+        const allBlocks = await Promise.all(blockPromises);
+
+        // Filter based on includeEmpty setting
+        const filteredBlocks = allBlocks.filter(block =>
+            this.includeEmpty || !block.isEmpty
+        );
+
+        // Sort by timestamp (newest first) - blocks have timestamp in their data
+        filteredBlocks.sort((a, b) => b.timestamp - a.timestamp);
+
+        // Apply pagination: skip (currentPage * pageSize) blocks, take pageSize
+        const startIdx = this.currentPage * this.pageSize;
+        const endIdx = startIdx + this.pageSize;
+        const pageBlocks = filteredBlocks.slice(startIdx, endIdx);
+
+        // Clear and render
+        container.innerHTML = '';
+        pageBlocks.forEach(block => {
+            container.innerHTML += block.html;
+        });
+
+        // Add click handlers for block details
+        container.querySelectorAll('.block-summary').forEach(blockEl => {
+            blockEl.addEventListener('click', (e) => {
+                const blockNumber = e.target.closest('.block-summary').dataset.blockNumber;
+                const shardId = e.target.closest('.block-summary').dataset.shardId;
+                this.showBlockDetailFromShard(blockNumber, shardId);
+            });
+        });
+
+        // Update pagination controls for all shards mode
+        const displayStart = startIdx + 1;
+        const displayEnd = Math.min(endIdx, filteredBlocks.length);
+        const maxHeight = Math.max(...shardHeights.map(sh => sh.height));
+        this.updatePaginationControlsAllShards(displayStart, displayEnd, filteredBlocks.length, maxHeight);
+        this.updatePaginationURL();
+    }
+
+    async loadBlockSummaryWithShard(blockNumber, shardId) {
+        try {
+            const block = await this.rpcClient.getBlock(blockNumber, shardId);
+
+            // Optimization: if previousBlockHash equals rootHash, block is definitely empty
+            const isDefinitelyEmpty = block.previousBlockHash === block.rootHash;
+
+            let commitmentCount = 0;
+
+            // Use totalCommitments from block data if available
+            if (block.totalCommitments !== undefined) {
+                commitmentCount = block.totalCommitments;
+            } else if (!isDefinitelyEmpty) {
+                // For TS aggregator, fetch commitments
+                const commitments = await this.rpcClient.getBlockCommitments(blockNumber, shardId).catch(() => []);
+                commitmentCount = commitments.length;
+            }
+
+            const timestamp = parseInt(block.timestamp);
+            const timestampStr = new Date(timestamp * 1000).toLocaleString();
+            const isEmpty = isDefinitelyEmpty || commitmentCount === 0;
+            const displayShardId = this.getDisplayShardId(shardId);
+
+            // Always show shard badge when viewing all shards
+            const html = `
+                <div class="block-summary ${isEmpty ? 'empty-block' : 'has-commitments'}" data-block-number="${blockNumber}" data-shard-id="${shardId}">
+                    <div class="block-header">
+                        <div class="block-number">
+                            Block #${blockNumber}
+                            <span class="shard-badge">Shard ${displayShardId}</span>
+                        </div>
+                        <div class="commitment-badge ${isEmpty ? 'empty' : 'has-data'}">
+                            ${isEmpty ? 'Empty' : `${commitmentCount} transaction${commitmentCount !== 1 ? 's' : ''}`}
+                        </div>
+                    </div>
+                    <div class="block-info">
+                        <div>Timestamp: ${timestampStr}</div>
+                        <div>Root Hash: ${block.rootHash || 'N/A'}</div>
+                    </div>
+                </div>
+            `;
+
+            return { html, isEmpty, blockNumber, shardId, timestamp };
+        } catch (error) {
+            const html = `
+                <div class="block-summary error" data-block-number="${blockNumber}" data-shard-id="${shardId}">
+                    <div class="block-number">Block #${blockNumber} <span class="shard-badge">Shard ${this.getDisplayShardId(shardId)}</span></div>
+                    <div class="block-info">Error loading block</div>
+                </div>
+            `;
+            return { html, isEmpty: true, blockNumber, shardId, timestamp: 0 };
+        }
+    }
+
+    async showBlockDetailFromShard(blockNumber, shardId) {
+        // Pass the specific shard for RPC calls while keeping currentShard as 'all'
+        await this.showBlockDetail(blockNumber, true, shardId);
+    }
+
+    updatePaginationControlsAllShards(startBlock, endBlock, totalFiltered, maxHeight) {
+        const blockRange = document.getElementById('blockRange');
+        blockRange.textContent = `Items ${startBlock} - ${endBlock} of ${totalFiltered} (Max Height: ${maxHeight})`;
+
+        const firstBtn = document.getElementById('firstPageBtn');
+        const prevBtn = document.getElementById('prevPageBtn');
+        const nextBtn = document.getElementById('nextPageBtn');
+        const latestBtn = document.getElementById('latestPageBtn');
+
+        // Disable/enable buttons based on current position
+        const maxPages = Math.ceil(totalFiltered / this.pageSize);
+        const isFirstPage = this.currentPage === 0;
+        const isLastPage = this.currentPage >= maxPages - 1;
+
+        firstBtn.disabled = isLastPage;
+        prevBtn.disabled = isLastPage;
+        nextBtn.disabled = isFirstPage;
+        latestBtn.disabled = isFirstPage;
     }
 
     async loadBlocksComplete(container, startBlock, endBlock) {
@@ -729,7 +901,15 @@ class BlockExplorer {
         // Clear existing options
         shardSelect.innerHTML = '';
 
-        // Add options for valid shards
+        // Add "All Shards" option if there are multiple shards
+        if (shards.length > 1) {
+            const allOption = document.createElement('option');
+            allOption.value = 'all';
+            allOption.textContent = 'All Shards';
+            shardSelect.appendChild(allOption);
+        }
+
+        // Add options for individual shards
         shards.forEach(shardId => {
             const option = document.createElement('option');
             option.value = shardId;
@@ -819,15 +999,24 @@ class BlockExplorer {
                 return; // Don't auto-refresh when viewing block details or proofs
             }
 
-            const heightResult = await this.rpcClient.getBlockHeight(this.currentShard);
-            const newHeight = parseInt(heightResult.blockNumber);
-            
+            let newHeight;
+            if (this.currentShard === 'all') {
+                // Get max height across all shards
+                const shards = this.getCachedShardsForNetwork(this.currentNetwork);
+                const heightPromises = shards.map(shardId => this.rpcClient.getBlockHeight(shardId));
+                const results = await Promise.all(heightPromises);
+                newHeight = Math.max(...results.map(r => parseInt(r.blockNumber)));
+            } else {
+                const heightResult = await this.rpcClient.getBlockHeight(this.currentShard);
+                newHeight = parseInt(heightResult.blockNumber);
+            }
+
             // If we have a new block, update the display
             if (this.currentBlock !== null && newHeight > this.currentBlock) {
                 this.showSpinner(); // Show spinner when new blocks are found
                 this.currentBlock = newHeight;
                 document.getElementById('currentHeight').textContent = newHeight;
-                
+
                 // If we're on the first page (latest blocks), refresh the blocks list
                 if (this.currentPage === 0) {
                     this.loadBlocks();
@@ -904,16 +1093,18 @@ class BlockExplorer {
         }
     }
 
-    async showBlockDetail(blockNumber, updateURL = true) {
+    async showBlockDetail(blockNumber, updateURL = true, shardOverride = null) {
         try {
-            const block = await this.rpcClient.getBlock(blockNumber, this.currentShard);
+            // Use shardOverride for RPC calls if provided (for all-shards mode)
+            const shardForRPC = shardOverride || this.currentShard;
+            const block = await this.rpcClient.getBlock(blockNumber, shardForRPC);
 
             // Optimization: if previousBlockHash equals rootHash, block is definitely empty
             const isDefinitelyEmpty = block.previousBlockHash === block.rootHash;
 
             let commitments = null;
             if (!isDefinitelyEmpty) {
-                commitments = await this.rpcClient.getBlockCommitments(blockNumber, this.currentShard).catch(() => null);
+                commitments = await this.rpcClient.getBlockCommitments(blockNumber, shardForRPC).catch(() => null);
             } else {
                 commitments = [];
             }
