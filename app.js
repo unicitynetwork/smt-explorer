@@ -1244,7 +1244,12 @@ class BlockExplorer {
 
             // Update URL with block parameter
             if (updateURL) {
-                this.updateURL({ block: blockNumber });
+                const urlParams = { block: blockNumber };
+                // When viewing a block from "All Shards" mode, use the specific shard in the URL
+                if (shardOverride) {
+                    urlParams.shard = shardOverride;
+                }
+                this.updateURL(urlParams);
             }
 
         } catch (error) {
