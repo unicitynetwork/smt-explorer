@@ -117,6 +117,38 @@ class AggregatorRPCClient {
         return result || [];
     }
 
+    async getBlockRecords(blockNumber, shardId) {
+        const result = await this.makeRequest('get_block_records', {
+            blockNumber: blockNumber.toString(),
+            shardId
+        });
+        // v2 aggregator returns records wrapped in an 'aggregatorRecords' field
+        if (result && Array.isArray(result.aggregatorRecords)) {
+            return result.aggregatorRecords;
+        }
+        return Array.isArray(result) ? result : [];
+    }
+
+    /**
+     * Fetch a block's transactions, adapting to the aggregator version.
+     * - v2 (testnet2 gateway): get_block_records -> { version: 'v2', records }
+     * - v1 (legacy goggregator):  get_block_commitments -> { version: 'v1', records }
+     * Tries v2 first; falls back to v1 only when v2's method is absent (-32601).
+     */
+    async getBlockTransactions(blockNumber, shardId) {
+        try {
+            const records = await this.getBlockRecords(blockNumber, shardId);
+            return { version: 'v2', records };
+        } catch (error) {
+            // Only fall back for "method not found"; surface real/transient errors.
+            if (!String(error?.message || '').includes('Method not found')) {
+                throw error;
+            }
+            const commitments = await this.getBlockCommitments(blockNumber, shardId).catch(() => []);
+            return { version: 'v1', records: commitments };
+        }
+    }
+
     async getInclusionProof(requestId) {
         const result = await this.makeRequest('get_inclusion_proof', { requestId });
 

@@ -918,6 +918,78 @@ class BlockExplorer {
         });
     }
 
+    // Render one transaction card, adapting to the aggregator record version.
+    renderTransactionCard(record, index, blockNumber, version) {
+        if (version === 'v2') {
+            const cd = record.certificationData || {};
+            const owner = cd.ownerPredicate || {};
+            const ownerText = owner.engine !== undefined
+                ? `engine ${owner.engine}${owner.code ? ` · code ${owner.code}` : ''}`
+                : undefined;
+            const rows = [
+                ['State ID', record.stateId],
+                ['Transaction Hash', cd.transactionHash],
+                ['Source State Hash', cd.sourceStateHash],
+                ['Owner Predicate', ownerText],
+                ['Witness', cd.witness],
+                ['Aggregated Requests', record.aggregateRequestCount],
+            ].filter(([, v]) => v !== undefined && v !== null && v !== '');
+            return `
+                <div class="commitment-card">
+                    <div class="commitment-header">
+                        <span class="commitment-index">#${index + 1}</span>
+                        <span class="commitment-id">State: ${record.stateId ?? ''}</span>
+                    </div>
+                    <div class="commitment-details">
+                        ${rows.map(([label, value]) => `
+                            <div class="detail-row">
+                                <label>${label}:</label>
+                                <span class="hash">${value}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // v1 (legacy goggregator) — unchanged fields/behaviour
+        const a = record.authenticator || {};
+        return `
+            <div class="commitment-card">
+                <div class="commitment-header">
+                    <span class="commitment-index">#${index + 1}</span>
+                    <span class="commitment-id">ID: ${record.requestId}</span>
+                </div>
+                <div class="commitment-details">
+                    <div class="detail-row">
+                        <label>Request ID:</label>
+                        <span class="hash clickable-hash" data-request-id="${record.requestId}" onclick="blockExplorer.showInclusionProofFromBlock('${record.requestId}', '${blockNumber}')">${record.requestId}</span>
+                    </div>
+                    <div class="detail-row">
+                        <label>Transaction Hash:</label>
+                        <span class="hash">${record.transactionHash}</span>
+                    </div>
+                    <div class="detail-row">
+                        <label>Algorithm:</label>
+                        <span>${a.algorithm}</span>
+                    </div>
+                    <div class="detail-row">
+                        <label>Public Key:</label>
+                        <span class="hash">${a.publicKey}</span>
+                    </div>
+                    <div class="detail-row">
+                        <label>Signature:</label>
+                        <span class="hash">${a.signature}</span>
+                    </div>
+                    <div class="detail-row">
+                        <label>State Hash:</label>
+                        <span class="hash">${a.stateHash}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     // Convert internal shard ID to a human-readable display ID.
     // testnet2 (bft-shard): ids are zero-padded BINARY prefixes ("000".."111");
     //   the prefix's binary value is the shard number (000 -> 0, 111 -> 7).
@@ -1107,15 +1179,17 @@ class BlockExplorer {
             // Optimization: if previousBlockHash equals rootHash, block is definitely empty
             const isDefinitelyEmpty = block.previousBlockHash === block.rootHash;
 
-            let commitments = null;
+            // Version-adaptive: v2 (testnet2) returns get_block_records, v1 returns
+            // get_block_commitments. recordVersion drives how each row is rendered.
+            let txn = { version: 'v2', records: [] };
             if (!isDefinitelyEmpty) {
-                commitments = await this.rpcClient.getBlockCommitments(blockNumber, shardForRPC).catch(() => null);
-            } else {
-                commitments = [];
+                txn = await this.rpcClient.getBlockTransactions(blockNumber, shardForRPC).catch(() => ({ version: 'v2', records: [] }));
             }
-            
+            const commitments = txn.records;
+            const recordVersion = txn.version;
+
             // Get total transaction count for Go aggregator
-            const totalTransactions = block.totalCommitments !== undefined ? block.totalCommitments : 
+            const totalTransactions = block.totalCommitments !== undefined ? block.totalCommitments :
                                     (commitments ? commitments.length : 0);
             const actualCommitments = commitments ? commitments.length : 0;
 
@@ -1187,40 +1261,7 @@ class BlockExplorer {
                                 ` : `<span class="transaction-counts">${commitments.length}</span>`}
                             </h4>
                             <div class="commitments-list">
-                                ${commitments.map((commitment, index) => `
-                                    <div class="commitment-card">
-                                        <div class="commitment-header">
-                                            <span class="commitment-index">#${index + 1}</span>
-                                            <span class="commitment-id">ID: ${commitment.requestId}</span>
-                                        </div>
-                                        <div class="commitment-details">
-                                            <div class="detail-row">
-                                                <label>Request ID:</label>
-                                                <span class="hash clickable-hash" data-request-id="${commitment.requestId}" onclick="blockExplorer.showInclusionProofFromBlock('${commitment.requestId}', '${blockNumber}')">${commitment.requestId}</span>
-                                            </div>
-                                            <div class="detail-row">
-                                                <label>Transaction Hash:</label>
-                                                <span class="hash">${commitment.transactionHash}</span>
-                                            </div>
-                                            <div class="detail-row">
-                                                <label>Algorithm:</label>
-                                                <span>${commitment.authenticator.algorithm}</span>
-                                            </div>
-                                            <div class="detail-row">
-                                                <label>Public Key:</label>
-                                                <span class="hash">${commitment.authenticator.publicKey}</span>
-                                            </div>
-                                            <div class="detail-row">
-                                                <label>Signature:</label>
-                                                <span class="hash">${commitment.authenticator.signature}</span>
-                                            </div>
-                                            <div class="detail-row">
-                                                <label>State Hash:</label>
-                                                <span class="hash">${commitment.authenticator.stateHash}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                `).join('')}
+                                ${commitments.map((commitment, index) => this.renderTransactionCard(commitment, index, blockNumber, recordVersion)).join('')}
                             </div>
                         </div>
                     ` : totalTransactions > 0 ? `
