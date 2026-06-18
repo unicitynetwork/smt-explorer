@@ -345,10 +345,9 @@ class BlockExplorer {
         searchParams.delete('shard');
         searchParams.delete('autoRefresh');
 
-        // Always include network in URL (unless it's the default testnet2)
-        if (this.currentNetwork !== 'testnet2') {
-            searchParams.set('network', this.currentNetwork);
-        }
+        // Always include the network in the URL so the selection is explicit
+        // and shareable (don't drop it for the default network).
+        searchParams.set('network', this.currentNetwork);
 
         // Always include shard in URL (unless the network only has one shard)
         // Include 'all' explicitly, or the specific shard ID
