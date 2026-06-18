@@ -1,6 +1,6 @@
 class BlockExplorer {
     constructor() {
-        this.currentNetwork = 'testnet'; // default
+        this.currentNetwork = 'testnet2'; // default
         this.shardCache = {}; // Cache for fetched shard configurations per network
         this.currentShard = null; // Will be set after fetching shards
         this.rpcClient = new AggregatorRPCClient();
@@ -71,7 +71,7 @@ class BlockExplorer {
         // Determine network from URL first (before fetching shards)
         const params = new URLSearchParams(window.location.search);
         const networkFromURL = params.get('network');
-        if (networkFromURL && ['local', 'testnet'].includes(networkFromURL)) {
+        if (networkFromURL && ['local', 'testnet', 'testnet2'].includes(networkFromURL)) {
             this.currentNetwork = networkFromURL;
             document.getElementById('networkSelect').value = networkFromURL;
         }
@@ -256,7 +256,7 @@ class BlockExplorer {
 
         // Handle network change
         const network = params.get('network');
-        if (network && ['local', 'testnet', 'mainnet'].includes(network) && network !== this.currentNetwork) {
+        if (network && ['local', 'testnet', 'testnet2', 'mainnet'].includes(network) && network !== this.currentNetwork) {
             // Fetch shards for new network
             let shards;
             try {
@@ -345,8 +345,8 @@ class BlockExplorer {
         searchParams.delete('shard');
         searchParams.delete('autoRefresh');
 
-        // Always include network in URL (unless it's the default testnet)
-        if (this.currentNetwork !== 'testnet') {
+        // Always include network in URL (unless it's the default testnet2)
+        if (this.currentNetwork !== 'testnet2') {
             searchParams.set('network', this.currentNetwork);
         }
 
@@ -919,12 +919,18 @@ class BlockExplorer {
         });
     }
 
-    // Convert internal shard ID to display ID by removing 0b1 prefix
-    // e.g., 2 (0b10) -> 0, 3 (0b11) -> 1
+    // Convert internal shard ID to a human-readable display ID.
+    // testnet2 (bft-shard): ids are zero-padded BINARY prefixes ("000".."111");
+    //   the prefix's binary value is the shard number (000 -> 0, 111 -> 7).
+    // legacy (v1): numeric id with a leading '1' bit prefix; strip it
+    //   (2 = 0b10 -> 0, 3 = 0b11 -> 1).
     getDisplayShardId(shardId) {
-        const id = parseInt(shardId);
-        // Find the position of the highest set bit (the prefix '1')
-        // and mask it out to get the remaining bits
+        const s = String(shardId);
+        if (/^[01]+$/.test(s) && s.length > 1) {
+            return parseInt(s, 2).toString();
+        }
+        const id = parseInt(s);
+        if (!Number.isFinite(id) || id <= 0) return s;
         const highestBit = Math.floor(Math.log2(id));
         const mask = (1 << highestBit) - 1;
         return (id & mask).toString();

@@ -1,5 +1,5 @@
 class AggregatorRPCClient {
-    constructor(endpoint = 'https://goggregator-test.unicity.network') {
+    constructor(endpoint = 'https://gateway.testnet2.unicity.network') {
         this.endpoint = endpoint;
         this.requestId = 1;
     }
@@ -11,10 +11,11 @@ class AggregatorRPCClient {
     static getNetworkEndpoint(network) {
         const endpoints = {
             'local': 'http://localhost:3000',
-            'testnet': 'https://goggregator-test.unicity.network/'
+            'testnet': 'https://goggregator-test.unicity.network/',
+            'testnet2': 'https://gateway.testnet2.unicity.network/'
         };
 
-        return endpoints[network] || endpoints['testnet'];
+        return endpoints[network] || endpoints['testnet2'];
     }
 
     async makeRequest(method, params = {}) {
@@ -154,8 +155,12 @@ class AggregatorRPCClient {
             }
 
             const data = await response.json();
-            // Extract shard IDs from response: {"version":1,"shardIds":[2,3]}
-            const shards = (data.shardIds || []).map(id => id.toString());
+            // testnet2 (bft-shard): {"version":1,"mode":"bft-shard","bftShardPrefixes":["000",...,"111"]}
+            // legacy (v1):          {"version":1,"shardIds":[2,3]}
+            const rawShards = Array.isArray(data.bftShardPrefixes)
+                ? data.bftShardPrefixes
+                : (data.shardIds || []);
+            const shards = rawShards.map(id => id.toString());
             return { shards, status: response.status };
         } catch (error) {
             console.error('Failed to fetch shard config:', error);
