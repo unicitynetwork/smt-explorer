@@ -8,11 +8,33 @@ class AggregatorRPCClient {
         this.endpoint = endpoint;
     }
 
+    /**
+     * Selectable networks, in the order they appear in the network selector.
+     * 'testnet2' is the URL/config key for the network labelled "Testnet"; the
+     * v1 goggregator deployment that used to own the 'testnet' key is retired.
+     * @returns {string[]} - Supported network keys
+     */
+    static getNetworks() {
+        return ['mainnet', 'testnet2', 'local'];
+    }
+
+    /**
+     * Maps a network value (typically from the URL) to a supported network key,
+     * accepting the retired 'testnet' value as an alias for testnet2 so old
+     * links still resolve to a live network.
+     * @param {string|null} network - Raw network value
+     * @returns {string|null} - Supported network key, or null if unrecognised
+     */
+    static normalizeNetwork(network) {
+        const key = network === 'testnet' ? 'testnet2' : network;
+        return AggregatorRPCClient.getNetworks().includes(key) ? key : null;
+    }
+
     static getNetworkEndpoint(network) {
         const endpoints = {
             'local': 'http://localhost:3000',
-            'testnet': 'https://goggregator-test.unicity.network/',
-            'testnet2': 'https://gateway.testnet2.unicity.network/'
+            'testnet2': 'https://gateway.testnet2.unicity.network/',
+            'mainnet': 'https://gateway.mainnet.unicity.network/'
         };
 
         return endpoints[network] || endpoints['testnet2'];
@@ -82,7 +104,7 @@ class AggregatorRPCClient {
                 chainId: goBlock.chainId === 'unicity' ? 1 : goBlock.chainId, // Convert string to number for consistency
                 shardId: goBlock.shardId,
                 version: parseFloat(goBlock.version) || 1,
-                forkId: goBlock.forkId === 'mainnet' ? 1 : goBlock.forkId,
+                forkId: goBlock.forkId, // chain-supplied label, e.g. 'mainnet' / 'testnet2'
                 timestamp: Math.floor(parseInt(goBlock.createdAt) / 1000).toString(), // Convert milliseconds to seconds
                 rootHash: formatHash(goBlock.rootHash),
                 previousBlockHash: formatHash(goBlock.previousBlockHash),
@@ -131,8 +153,8 @@ class AggregatorRPCClient {
 
     /**
      * Fetch a block's transactions, adapting to the aggregator version.
-     * - v2 (testnet2 gateway): get_block_records -> { version: 'v2', records }
-     * - v1 (legacy goggregator):  get_block_commitments -> { version: 'v1', records }
+     * - v2 (mainnet/testnet gateways): get_block_records -> { version: 'v2', records }
+     * - v1 (legacy aggregator):       get_block_commitments -> { version: 'v1', records }
      * Tries v2 first; falls back to v1 only when v2's method is absent (-32601).
      */
     async getBlockTransactions(blockNumber, shardId) {
@@ -166,7 +188,7 @@ class AggregatorRPCClient {
 
     /**
      * Fetches shard IDs from the aggregator's config endpoint.
-     * @param {string} network - The network name (e.g., 'local', 'testnet')
+     * @param {string} network - The network name (e.g., 'mainnet', 'testnet2', 'local')
      * @returns {Promise<{shards: string[], status: number}>} - Shard IDs and HTTP status
      */
     static async fetchShardConfig(network) {
@@ -187,8 +209,8 @@ class AggregatorRPCClient {
             }
 
             const data = await response.json();
-            // testnet2 (bft-shard): {"version":1,"mode":"bft-shard","bftShardPrefixes":["000",...,"111"]}
-            // legacy (v1):          {"version":1,"shardIds":[2,3]}
+            // v2 gateway (bft-shard): {"version":1,"mode":"bft-shard","bftShardPrefixes":["00",...,"11"]}
+            // legacy (v1):            {"version":1,"shardIds":[2,3]}
             const rawShards = Array.isArray(data.bftShardPrefixes)
                 ? data.bftShardPrefixes
                 : (data.shardIds || []);

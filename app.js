@@ -70,8 +70,8 @@ class BlockExplorer {
 
         // Determine network from URL first (before fetching shards)
         const params = new URLSearchParams(window.location.search);
-        const networkFromURL = params.get('network');
-        if (networkFromURL && ['local', 'testnet', 'testnet2'].includes(networkFromURL)) {
+        const networkFromURL = AggregatorRPCClient.normalizeNetwork(params.get('network'));
+        if (networkFromURL) {
             this.currentNetwork = networkFromURL;
             document.getElementById('networkSelect').value = networkFromURL;
         }
@@ -255,8 +255,8 @@ class BlockExplorer {
         const params = new URLSearchParams(window.location.search);
 
         // Handle network change
-        const network = params.get('network');
-        if (network && ['local', 'testnet', 'testnet2', 'mainnet'].includes(network) && network !== this.currentNetwork) {
+        const network = AggregatorRPCClient.normalizeNetwork(params.get('network'));
+        if (network && network !== this.currentNetwork) {
             // Fetch shards for new network
             let shards;
             try {
@@ -991,8 +991,9 @@ class BlockExplorer {
     }
 
     // Convert internal shard ID to a human-readable display ID.
-    // testnet2 (bft-shard): ids are zero-padded BINARY prefixes ("000".."111");
-    //   the prefix's binary value is the shard number (000 -> 0, 111 -> 7).
+    // v2 gateways (bft-shard): ids are zero-padded BINARY prefixes, one bit per
+    //   level of sharding (mainnet "00".."11", testnet "000".."111"); the
+    //   prefix's binary value is the shard number ("00" -> 0, "111" -> 7).
     // legacy (v1): numeric id with a leading '1' bit prefix; strip it
     //   (2 = 0b10 -> 0, 3 = 0b11 -> 1).
     getDisplayShardId(shardId) {
