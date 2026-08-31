@@ -687,6 +687,21 @@ main {
     font-size: 14px;
 }
 
+.search-results-summary {
+    margin-bottom: 20px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.search-results-note {
+    margin-top: 16px;
+    padding: 12px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-tertiary);
+    font-size: 13px;
+}
+
 .no-commitments {
     text-align: center;
     padding: 48px;

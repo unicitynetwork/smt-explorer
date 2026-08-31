@@ -585,7 +585,7 @@ class BlockExplorer {
                 </div>
             `;
 
-            return { html, isEmpty, blockNumber, shardId, timestamp };
+            return { html, isEmpty, blockNumber, shardId, timestamp, error: false };
         } catch (error) {
             const html = `
                 <div class="block-summary error" data-block-number="${blockNumber}" data-shard-id="${shardId}">
@@ -593,13 +593,88 @@ class BlockExplorer {
                     <div class="block-info">Error loading block</div>
                 </div>
             `;
-            return { html, isEmpty: true, blockNumber, shardId, timestamp: 0 };
+            return { html, isEmpty: true, blockNumber, shardId, timestamp: 0, error: true };
         }
+    }
+
+    /**
+     * View requests are serialised by token: block/search views await RPCs before
+     * writing innerHTML, so a slow earlier request could otherwise land on top of
+     * a newer one and leave the URL describing a different view than the one shown.
+     */
+    beginViewRequest() {
+        this.viewRequestCounter = (this.viewRequestCounter || 0) + 1;
+        return this.viewRequestCounter;
+    }
+
+    isStaleViewRequest(token) {
+        return token !== this.viewRequestCounter;
     }
 
     async showBlockDetailFromShard(blockNumber, shardId) {
         // Pass the specific shard for RPC calls while keeping currentShard as 'all'
         await this.showBlockDetail(blockNumber, true, shardId);
+    }
+
+    /**
+     * In "All Shards" mode a block number is ambiguous — every shard has its own
+     * block N — so list the per-shard matches and let the user pick one, rather
+     * than sending shardId 'all' to get_block (the gateway rejects it with a 400).
+     * Rendered into the block-detail section, which also suspends auto-refresh.
+     */
+    async showBlockSearchResults(blockNumber, updateURL = true) {
+        const viewRequest = this.beginViewRequest();
+        const shards = this.getCachedShardsForNetwork(this.currentNetwork);
+        const results = await Promise.all(
+            shards.map(shardId => this.loadBlockSummaryWithShard(blockNumber, shardId))
+        );
+        if (this.isStaleViewRequest(viewRequest)) {
+            return;
+        }
+
+        const found = results.filter(result => !result.error);
+        const missing = results.filter(result => result.error);
+        const missingIds = missing.map(result => this.getDisplayShardId(result.shardId)).join(', ');
+
+        const contentEl = document.getElementById('blockDetailContent');
+        contentEl.innerHTML = `
+            <div class="block-detail-header">
+                <h3>Block #${blockNumber}</h3>
+                <button id="backBtn">← Back to List</button>
+            </div>
+            <div class="search-results-summary">
+                ${found.length > 0
+                    ? `Found on ${found.length} of ${shards.length} shards — select one to view its details.`
+                    : `Block #${blockNumber} was not found on any of the ${shards.length} shards.`}
+            </div>
+            <div class="blocks-container">
+                ${found.map(result => result.html).join('')}
+            </div>
+            ${missing.length > 0 && found.length > 0 ? `
+                <div class="search-results-note">
+                    Not available on shard${missing.length !== 1 ? 's' : ''} ${missingIds}.
+                </div>
+            ` : ''}
+        `;
+
+        document.getElementById('backBtn').addEventListener('click', () => {
+            this.showBlockList();
+        });
+
+        contentEl.querySelectorAll('.block-summary').forEach(blockEl => {
+            blockEl.addEventListener('click', (e) => {
+                const card = e.target.closest('.block-summary');
+                this.showBlockDetailFromShard(card.dataset.blockNumber, card.dataset.shardId);
+            });
+        });
+
+        document.getElementById('blockDetail').classList.remove('hidden');
+        document.getElementById('blockList').classList.add('hidden');
+        document.getElementById('overview').classList.add('hidden');
+
+        if (updateURL) {
+            this.updateURL({ block: blockNumber });
+        }
     }
 
     updatePaginationControlsAllShards(startBlock, endBlock, totalFiltered, maxHeight) {
@@ -1173,6 +1248,13 @@ class BlockExplorer {
 
     async showBlockDetail(blockNumber, updateURL = true, shardOverride = null) {
         try {
+            // No single block N exists across shards; show the per-shard matches instead.
+            if (!shardOverride && this.currentShard === 'all') {
+                return await this.showBlockSearchResults(blockNumber, updateURL);
+            }
+
+            const viewRequest = this.beginViewRequest();
+
             // Use shardOverride for RPC calls if provided (for all-shards mode)
             const shardForRPC = shardOverride || this.currentShard;
             const block = await this.rpcClient.getBlock(blockNumber, shardForRPC);
@@ -1193,6 +1275,10 @@ class BlockExplorer {
             const totalTransactions = block.totalCommitments !== undefined ? block.totalCommitments :
                                     (commitments ? commitments.length : 0);
             const actualCommitments = commitments ? commitments.length : 0;
+
+            if (this.isStaleViewRequest(viewRequest)) {
+                return;
+            }
 
             const detailSection = document.getElementById('blockDetail');
             const contentEl = document.getElementById('blockDetailContent');
@@ -1215,7 +1301,7 @@ class BlockExplorer {
                     </div>
                     <div class="detail-row">
                         <label>Shard ID:</label>
-                        <span>${this.getDisplayShardId(block.shardId)}</span>
+                        <span>${this.getDisplayShardId(shardForRPC)}</span>
                     </div>
                     <div class="detail-row">
                         <label>Version:</label>
