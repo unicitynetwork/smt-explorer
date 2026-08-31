@@ -6,7 +6,7 @@ A modern, browser-based block explorer for the Unicity blockchain. Built with va
 
 - 🌟 **Real-time Block Data** - View latest blocks and their details
 - ⚡ **Auto-refresh** - Automatic polling for new blocks with 1-second intervals (default enabled)
-- 🌐 **Multi-Network Support** - Switch between Devnet, Testnet, and Mainnet
+- 🌐 **Multi-Network Support** - Switch between Mainnet, Testnet, and a local aggregator
 - 🔍 **Block Search** - Search for specific blocks by number
 - 📄 **Paginated Navigation** - Browse blocks with customizable page sizes (5-100)
 - 🔗 **Commitment Details** - View detailed commitment information with authenticator data
@@ -24,9 +24,12 @@ Visit the live demo: [Unicity Block Explorer](https://unicitynetwork.github.io/s
 
 The explorer supports multiple blockchain networks:
 
-- **Local**
-- **Testnet** (default)
-- **Mainnet**
+- **Mainnet** - `https://gateway.mainnet.unicity.network/` (4 shards)
+- **Testnet** (default) - `https://gateway.testnet2.unicity.network/` (8 shards)
+- **Localhost** - `http://localhost:3000`
+
+Shards are discovered at runtime from each gateway's `/config/shards` endpoint, so shard
+counts follow the deployment rather than being hard-coded.
 
 Switch networks using the dropdown selector in the header. Network selection is preserved in the URL.
 
@@ -34,7 +37,8 @@ Switch networks using the dropdown selector in the header. Network selection is 
 
 - `get_block_height` - Get current block number
 - `get_block` - Retrieve block information
-- `get_block_commitments` - Get all commitments in a block
+- `get_block_records` - Get all records in a block (v2 aggregators)
+- `get_block_commitments` - Get all commitments in a block (v1 aggregators)
 - `get_inclusion_proof` - Get inclusion proof for a request
 
 ## Usage
@@ -44,7 +48,7 @@ Simply open `index.html` in any modern web browser. The explorer runs entirely c
 ### Navigation
 
 - **Header Navigation** 
-  - **Network Selector** - Switch between Devnet, Testnet, and Mainnet
+  - **Network Selector** - Switch between Mainnet, Testnet, and Localhost
   - **Block Explorer Title** - Click to return to frontpage from any view
   - **Search Bar** - Enter block number to navigate directly
 - **Latest Block Panel** 
@@ -72,7 +76,8 @@ Simply open `index.html` in any modern web browser. The explorer runs entirely c
 
 All application state is preserved in URLs for easy sharing:
 
-- `?network=local|testnet|mainnet` - Selected network (testnet is default)
+- `?network=mainnet|testnet2|local` - Selected network (`testnet2` is default; the retired
+  `testnet` value is accepted as an alias for it)
 - `?page=N` - Current page number
 - `?pageSize=5|10|25|50|100` - Number of blocks per page
 - `?block=N` - Viewing specific block details
