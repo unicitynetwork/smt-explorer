@@ -593,7 +593,12 @@ class BlockExplorer {
                     <div class="block-info">Error loading block</div>
                 </div>
             `;
-            return { html, isEmpty: true, blockNumber, shardId, timestamp: 0, error: true };
+            return {
+                html, isEmpty: true, blockNumber, shardId, timestamp: 0,
+                error: true,
+                // Absent from the chain, vs. simply unverifiable right now.
+                missing: AggregatorRPCClient.isBlockNotFound(error)
+            };
         }
     }
 
@@ -609,6 +614,12 @@ class BlockExplorer {
 
     isStaleViewRequest(token) {
         return token !== this.viewRequestCounter;
+    }
+
+    // Navigating away (back to list, network/shard switch) has to invalidate any
+    // in-flight view request, or it reopens the detail view once it resolves.
+    invalidateViewRequest() {
+        this.beginViewRequest();
     }
 
     async showBlockDetailFromShard(blockNumber, shardId) {
@@ -633,8 +644,32 @@ class BlockExplorer {
         }
 
         const found = results.filter(result => !result.error);
-        const missing = results.filter(result => result.error);
-        const missingIds = missing.map(result => this.getDisplayShardId(result.shardId)).join(', ');
+        const missing = results.filter(result => result.error && result.missing);
+        const failed = results.filter(result => result.error && !result.missing);
+        const shardIds = list => list.map(result => this.getDisplayShardId(result.shardId)).join(', ');
+        const plural = list => (list.length !== 1 ? 's' : '');
+
+        let summary;
+        if (found.length > 0) {
+            summary = `Found on ${found.length} of ${shards.length} shards — select one to view its details.`;
+        } else if (failed.length === shards.length) {
+            summary = `Block #${blockNumber} could not be checked — no shard responded.`;
+        } else if (missing.length === shards.length) {
+            summary = `Block #${blockNumber} was not found on any of the ${shards.length} shards.`;
+        } else {
+            summary = `Block #${blockNumber} was not found on ${missing.length} shard${plural(missing)}; `
+                + `${failed.length} could not be checked.`;
+        }
+
+        // Only claim a shard lacks the block when the gateway actually said so; an
+        // unreachable shard is reported as unknown, never as authoritative chain data.
+        const notes = [];
+        if (missing.length > 0 && found.length > 0) {
+            notes.push(`Not available on shard${plural(missing)} ${shardIds(missing)}.`);
+        }
+        if (failed.length > 0) {
+            notes.push(`Could not check shard${plural(failed)} ${shardIds(failed)} — the gateway returned an error.`);
+        }
 
         const contentEl = document.getElementById('blockDetailContent');
         contentEl.innerHTML = `
@@ -642,18 +677,12 @@ class BlockExplorer {
                 <h3>Block #${blockNumber}</h3>
                 <button id="backBtn">← Back to List</button>
             </div>
-            <div class="search-results-summary">
-                ${found.length > 0
-                    ? `Found on ${found.length} of ${shards.length} shards — select one to view its details.`
-                    : `Block #${blockNumber} was not found on any of the ${shards.length} shards.`}
-            </div>
+            <div class="search-results-summary">${summary}</div>
             <div class="blocks-container">
                 ${found.map(result => result.html).join('')}
             </div>
-            ${missing.length > 0 && found.length > 0 ? `
-                <div class="search-results-note">
-                    Not available on shard${missing.length !== 1 ? 's' : ''} ${missingIds}.
-                </div>
+            ${notes.length > 0 ? `
+                <div class="search-results-note">${notes.join('<br>')}</div>
             ` : ''}
         `;
 
@@ -869,6 +898,8 @@ class BlockExplorer {
 
 
     async changeNetwork(network) {
+        this.invalidateViewRequest();
+
         // Clear UI immediately to show responsiveness
         const container = document.getElementById('blocksContainer');
         if (container) {
@@ -927,6 +958,7 @@ class BlockExplorer {
     }
 
     changeShard(shardId) {
+        this.invalidateViewRequest();
         this.currentShard = shardId;
 
         // Reset to first page when changing shards
@@ -1391,6 +1423,7 @@ class BlockExplorer {
     }
 
     showBlockList() {
+        this.invalidateViewRequest();
         document.getElementById('blockDetail').classList.add('hidden');
         document.getElementById('blockList').classList.remove('hidden');
         document.getElementById('overview').classList.remove('hidden');

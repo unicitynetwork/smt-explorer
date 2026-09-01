@@ -73,6 +73,13 @@ to `showBlockSearchResults()` whenever it has no `shardOverride` and `currentSha
 badged summary cards, which the user clicks through to a concrete shard. It covers both
 entry points that lack a shard — the search box and a bare `?block=N` URL.
 
+A shard that reports no such block and a shard that failed to answer are different facts and
+must stay that way in the UI: only `AggregatorRPCClient.isBlockNotFound(error)` — the
+gateway's explicit `error.data: "block not found"`, delivered as HTTP 200 — counts as
+"not available". Timeouts, 5xx and malformed responses are reported as unchecked, never as
+authoritative chain data. `makeRequest()` therefore preserves `rpcCode`/`rpcData` on the
+thrown Error; don't collapse it back to a bare message.
+
 ### Pagination is inverted
 
 `currentPage === 0` is the **newest** page. "Next" *decrements* the page, "Prev"
@@ -116,7 +123,9 @@ distinct numbers when they disagree.
 Both view functions await RPCs before writing `innerHTML`, so they take a token from
 `beginViewRequest()` and bail via `isStaleViewRequest()` after the await — otherwise a slow
 earlier request lands on top of a newer view and the URL ends up describing something other
-than what is on screen.
+than what is on screen. Navigating away counts as superseding: `showBlockList()`,
+`changeNetwork()` and `changeShard()` call `invalidateViewRequest()`, or an in-flight detail
+load reopens the detail view and rewrites the URL after the user has already left it.
 
 All rendering is template literals assigned to `innerHTML`; RPC values are interpolated
 without escaping, so treat added fields accordingly. v1 transaction cards use an inline
