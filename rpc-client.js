@@ -64,7 +64,12 @@ class AggregatorRPCClient {
             const data = await response.json();
             
             if (data.error) {
-                throw new Error(`RPC error: ${data.error.message || 'Unknown error'}`);
+                // Keep the structured fields: 'block not found' arrives as a normal
+                // JSON-RPC error and must not be confused with a transport failure.
+                const rpcError = new Error(`RPC error: ${data.error.message || 'Unknown error'}`);
+                rpcError.rpcCode = data.error.code;
+                rpcError.rpcData = data.error.data;
+                throw rpcError;
             }
 
             return data.result;
@@ -72,6 +77,15 @@ class AggregatorRPCClient {
             console.error('RPC request failed:', error);
             throw error;
         }
+    }
+
+    /**
+     * True only when the gateway explicitly reported the block as absent, as
+     * opposed to a timeout, 5xx, malformed response or other transient failure.
+     * @param {Error} error - Error thrown by a request method
+     */
+    static isBlockNotFound(error) {
+        return String(error?.rpcData || '').toLowerCase().includes('block not found');
     }
 
     async getBlockHeight(shardId) {
